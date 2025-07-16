@@ -45,7 +45,7 @@
                     <div class="shrink-0 flex flex-col items-start w-full mt-8">
                     
                     <a href="{{ route('dashboard') }}">
-                        <img src="{{ asset('images/kravas-logo-horizontal.png') }}" class="block h-14 w-auto" alt="Kravas Logo" />
+                        <img src="{{ asset('images/logo-principal.png') }}" class="block h-[150px] w-auto" alt="Kravas Logo" />
                     </a>
                     <div class="text-7xl">Génesis</div>
                             

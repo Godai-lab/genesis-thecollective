@@ -9,7 +9,7 @@
                         <x-application-logo class="block h-6 w-auto fill-current text-white" />
                     </a> --}}
                     <a href="{{ route('dashboard') }}">
-                        <img src="{{ asset('images/kravas-logo-horizontal.png') }}" class="block h-14 w-auto" alt="Kravas Logo" />
+                        <img src="{{ asset('images/logo-nav.png') }}" class="block h-12 w-auto" alt="TheCollective Logo" />
                     </a>
                             
                 </div>

@@ -1472,7 +1472,7 @@
                                         <div class="flex flex-wrap">
                                             @foreach($imageFiles as $index => $image)
                                                 <div class="image-preview">
-                                                    rr
+                                                    
                                                     <img src="{{ $image->temporaryUrl() }}" alt="Imagen de referencia">
                                                     <div class="remove-image" wire:click="quitarImagen({{ $index }})">×</div>
                                                 </div>

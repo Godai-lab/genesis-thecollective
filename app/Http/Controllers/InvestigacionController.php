@@ -154,30 +154,27 @@ class InvestigacionController extends Controller
     public function callPerplexity($country, $brand, $instruccion){
         
 
-        $prompt = <<<EOT
+ $prompt = <<<EOT
 Conduct a comprehensive advertising and marketing research report on the brand "$brand," operating in "$country," addressing the following user request: "$instruccion." The report should be professionally structured, detailed, and easy to navigate, containing updated and relevant data. The deliverable should include:
-                
-Executive Summary
-                
-Background and Market Context
-                
-Brand Analysis (current market positioning, advertising strategies, and competitive landscape)
-                
-Key Insights and Recommendations directly responding to the user's specific instruction
-                
+
+- Executive Summary
+- Background and Market Context
+- Brand Analysis (current market positioning, advertising strategies, and competitive landscape)
+- Key Insights and Recommendations directly responding to the user's specific instruction
+
 Ensure the report meets professional advertising research standards similar to those produced by leading agencies such as Kantar.
-                
-Your response must be formatted strictly in HTML with the following specific format:
-1. For main titles, use: `<p><strong>TITLE TEXT</strong></p>`
-2. For subtitles, use: `<p><strong>SUBTITLE TEXT</strong></p>`
-3. For normal paragraphs, use: `<p>PARAGRAPH TEXT</p>`
-4. Instead of using `<ul>` or `<ol>` lists, format enumerations as numbered items in separate paragraphs, using bold for the number:
-   - `<p><strong>1.</strong> First item text</p>`
-   - `<p><strong>2.</strong> Second item text</p>`
-5. Do NOT use `<h1>`, `<h2>`, or any heading tags
-6. IMPORTANT: **Absolutely no blank lines, line breaks, or unnecessary spaces between HTML tags. The response should be a single continuous text block without interruptions.**
-7. **All text must be enclosed within proper HTML tags with no extra spaces or line breaks between them.**  
+
+Your response must be formatted **strictly in Markdown** using the following rules:
+
+1. Use `#` for main titles.
+2. Use `##` for subtitles.
+3. Use standard paragraph text for regular content (no extra formatting unless necessary).
+4. Use **numbered lists** where needed for structured points.
+5. Do **not** include any HTML tags or code formatting.
+6. The response must be clear, clean, and easy to parse using Markdown renderers (GitHub, Notion, PDF converters, etc.)
+7. All sections must be written in **Spanish** in a professional, research-oriented tone.
 EOT;
+
 
         
 $system_prompt = <<<EOT
@@ -185,27 +182,24 @@ You are a specialist researcher in advertising and marketing whose task is to co
 
 Rules:
 
-- Always respond exclusively in Spanish, using a professional research tone.
+- Always respond exclusively in Spanish, using a professional and research-driven tone.
 - Present the final answer strictly in the form of an advertising research report, avoiding any explanation of how the information was obtained.
-- Format your response strictly as HTML with this specific structure:
-  1. All main titles must be wrapped in `<p><strong>TITLE TEXT</strong></p>` tags.
-  2. All subtitles must be wrapped in `<p><strong>SUBTITLE TEXT</strong></p>` tags.
-  3. Regular text must use `<p>PARAGRAPH TEXT</p>` tags.
-  4. Never use `<h1>`, `<h2>`, or any heading tags.
-  5. Instead of using `<ul>` or `<ol>` lists, format enumerations as numbered items in separate paragraphs, using bold for the number:
-     - `<p><strong>1.</strong> First item text</p>`
-     - `<p><strong>2.</strong> Second item text</p>`
-  6. CRITICAL: **Ensure there are NO blank lines, NO line breaks, and NO extra spaces between HTML tags. The response must be a single, continuous text block.**
-  7. **Do NOT use `<em></em>` for separation—just maintain proper HTML structure without unnecessary whitespace.**
-  8. The final output must be fully structured as valid HTML without markdown syntax, ensuring compatibility with systems requiring clean HTML formatting.
+- Format the response strictly in Markdown using this structure:
+  1. Use `#` for main titles.
+  2. Use `##` for subtitles.
+  3. Write regular text as simple paragraphs.
+  4. For enumerations, use numbered Markdown lists.
+  5. Avoid any HTML or code formatting.
+  6. The entire response must be well-structured, clean, and professionally presented for easy export to PDF or other formats.
+  7. Ensure the result is aligned with the standards of high-end advertising research agencies like Kantar.
 
-Steps to conduct and deliver the research:
+Process:
 
-1. Clearly identify the parameters provided by the user: country, category, brand, and the specific request.
-2. Conduct thorough online research using the provided parameters to gather updated, detailed, and relevant information.
-3. Evaluate the collected data carefully, selecting only the most relevant, updated, and insightful information to accurately fulfill the request.
-4. Prepare the deliverable to match the quality and depth expected from professional advertising research, akin to a Kantar-style report.
-5. Deliver only the final response in the chosen format, ensuring clarity, depth, and professional structure worthy of industry-leading advertising research standards.
+1. Clearly identify the parameters provided by the user: country, brand, and specific request.
+2. Conduct thorough online research using those parameters.
+3. Curate the most relevant and updated information.
+4. Write the report in a structured, professional format.
+5. Deliver the response in Markdown, and **nothing else**.
 EOT;
 
         
@@ -213,9 +207,12 @@ EOT;
 
 try {
     $model = "sonar-deep-research";
-    $temperature = 0.7;
+    $temperature = 0.5;
     $response = PerplexityService::ChatCompletions($prompt, $model, $temperature, $system_prompt);
-
+// Log completo de la respuesta de Perplexity
+    Log::info('Respuesta PerplexityService::ChatCompletions', [
+        'response' => $response
+    ]); 
     if (!isset($response['data'])) {
         Log::error('La respuesta de ChatCompletions no contiene la clave "data"', [
             'response' => $response,

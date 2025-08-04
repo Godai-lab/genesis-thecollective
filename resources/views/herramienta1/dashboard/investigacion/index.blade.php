@@ -364,53 +364,75 @@
 
                             if (data.success) {
                                 // El formato ha cambiado, ahora details es directamente el HTML
-                                if (data.details) {
-                                    // Guardamos el HTML para poder referenciarlo después
-                                    investigacionHTML = data.details;
+                                // if (data.details) {
+                                //     // Guardamos el HTML para poder referenciarlo después
+                                //     investigacionHTML = data.details;
                                     
-                                    // Actualizar el editor con la investigación HTML
-                                    if (quill_investigacion) {
-                                        // Insertamos el HTML directamente en el editor
-                                        quill_investigacion.root.innerHTML = data.details;
+                                //     // Actualizar el editor con la investigación HTML
+                                //     if (quill_investigacion) {
+                                //         // Insertamos el HTML directamente en el editor
+                                //         quill_investigacion.root.innerHTML = data.details;
                                         
-                                        // Esperar a que Quill termine de renderizar y luego refrescar la vista
-                                        setTimeout(() => {
-                                            // Forzar que Quill actualice su visualización
-                                            quill_investigacion.update();
+                                //         // Esperar a que Quill termine de renderizar y luego refrescar la vista
+                                //         setTimeout(() => {
+                                //             // Forzar que Quill actualice su visualización
+                                //             quill_investigacion.update();
                                             
-                                            // Ajustar el tamaño del contenedor si es necesario
-                                            const editorContainer = document.querySelector('#editorinvestigacion');
-                                            if (editorContainer) {
-                                                // Asegurar que el contenedor tenga suficiente altura
-                                                editorContainer.style.minHeight = '500px';
+                                //             // Ajustar el tamaño del contenedor si es necesario
+                                //             const editorContainer = document.querySelector('#editorinvestigacion');
+                                //             if (editorContainer) {
+                                //                 // Asegurar que el contenedor tenga suficiente altura
+                                //                 editorContainer.style.minHeight = '500px';
                                                 
-                                                // Desplazarse al inicio del editor
-                                                editorContainer.scrollTop = 0;
-                                            }
-                                        }, 500);
-                                    }
+                                //                 // Desplazarse al inicio del editor
+                                //                 editorContainer.scrollTop = 0;
+                                //             }
+                                //         }, 500);
+                                //     }
                                     
-                                    // Actualizar el input hidden con el HTML
-                                    const investigacionInput = document.getElementById('investigaciongenerada');
-                                    if (investigacionInput) {
-                                        investigacionInput.value = data.details;
-                                    }
+                                //     // Actualizar el input hidden con el HTML
+                                //     const investigacionInput = document.getElementById('investigaciongenerada');
+                                //     if (investigacionInput) {
+                                //         investigacionInput.value = data.details;
+                                //     }
                                     
-                                    // Guardar para futuras referencias
-                                    localStorage.setItem('investigacion_account_id', accountID);
-                                    localStorage.setItem('investigacionHTML', data.details);
-                                }
-
-                                // // Las fuentes pueden estar en un formato diferente ahora
-                                // const fuentesLista = document.getElementById('fuentes-lista');
-                                // if (fuentesLista && data.citations) {  // Usamos citations si existe
-                                //     fuentesLista.innerHTML = (data.citations || [])
-                                //         .map(fuente => `<p class="mb-2">• ${fuente}</p>`)
-                                //         .join('');
-                                // } else if (fuentesLista) {
-                                //     // Si no hay citations específicas, dejamos el contenedor vacío
-                                //     fuentesLista.innerHTML = '<p class="mb-2">No se encontraron fuentes para esta investigación.</p>';
+                                //     // Guardar para futuras referencias
+                                //     localStorage.setItem('investigacion_account_id', accountID);
+                                //     localStorage.setItem('investigacionHTML', data.details);
                                 // }
+if (data.details) {
+    // Elimina los separadores '---' del Markdown
+    let markdownContent = data.details.replace(/^---$/gm, '');
+
+    // Convierte Markdown a HTML
+    let htmlContent = marked.parse(markdownContent);
+
+    // Elimina saltos de línea y espacios innecesarios
+    htmlContent = htmlContent.replace(/>\s+</g, '><').replace(/\n/g, '');
+
+    investigacionHTML = htmlContent;
+
+    if (quill_investigacion) {
+        quill_investigacion.root.innerHTML = htmlContent;
+        setTimeout(() => {
+            quill_investigacion.update();
+            const editorContainer = document.querySelector('#editorinvestigacion');
+            if (editorContainer) {
+                editorContainer.style.minHeight = '500px';
+                editorContainer.scrollTop = 0;
+            }
+        }, 500);
+    }
+
+    const investigacionInput = document.getElementById('investigaciongenerada');
+    if (investigacionInput) {
+        investigacionInput.value = htmlContent;
+    }
+
+    localStorage.setItem('investigacion_account_id', accountID);
+    localStorage.setItem('investigacionHTML', htmlContent);
+}
+                                
 
                                 // Navegar al siguiente paso (Step 3)
                                 contenedor.style.display = 'none';

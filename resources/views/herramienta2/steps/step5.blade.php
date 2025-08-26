@@ -24,6 +24,7 @@ $promociones = [
     <div id="step-5-form-content">
         <form id="step-5-form" method="POST" action="{{route('herramienta2.saveeleccioncampania')}}" data-validate="true">
             @csrf
+            <input type="hidden" name="construccionescenario" id="construccionescenario">
             <div class="space-y-12">
                 <div class="border-b border-gray-700 pb-12 mb-6">
                     <h2 class="text-base font-semibold leading-7 text-black dark:text-gray-100">Elección de campaña</h2>

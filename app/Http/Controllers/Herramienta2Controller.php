@@ -27,46 +27,85 @@ class Herramienta2Controller extends Controller
         return view('herramienta2.index', compact('accounts'));
 
     }
-    public function generarGenesis(Request $request){
-        // Validar las URLs y archivos
-        $validator = Validator::make($request->all(), [
-            '360_objective' => 'required|string',
-            'account' => 'required|integer',
-            'brief' => 'required|integer',
+   public function generarGenesis(Request $request){
+    Log::info('Iniciando generarGenesis', [
+        'request_data' => $request->all()
+    ]);
+    
+    // Validar las URLs y archivos
+    $validator = Validator::make($request->all(), [
+        '360_objective' => 'required|string',
+        'account' => 'required|integer',
+        'brief' => 'required|integer',
+    ]);
+
+    if ($validator->fails()) {
+        Log::error('Validación fallida en generarGenesis', [
+            'errors' => $validator->errors()
         ]);
-
-        if ($validator->fails()) {
-            return response()->json(['error' => $validator->errors()]);
-        }
-        ini_set('max_execution_time', 800);
-        $objective = $request->input('360_objective');
-        $accountId = $request->input('account');
-        $idBrief = $request->input('brief');
+        return response()->json(['error' => $validator->errors()]);
+    }
+    
+    ini_set('max_execution_time', 800);
+    $objective = $request->input('360_objective');
+    $accountId = $request->input('account');
+    $idBrief = $request->input('brief');
+    
+    Log::info('Datos extraídos de la request', [
+        'objective' => $objective,
+        'accountId' => $accountId,
+        'idBrief' => $idBrief
+    ]);
+    
+    try {
         $brief = Generated::find($idBrief)->value;
+        Log::info('Brief encontrado', [
+            'brief_length' => strlen($brief),
+            'brief_preview' => substr($brief, 0, 100) . '...'
+        ]);
+    } catch (\Exception $e) {
+        Log::error('Error al obtener el brief', [
+            'idBrief' => $idBrief,
+            'error' => $e->getMessage()
+        ]);
+        return response()->json(['error' => 'Error al obtener el brief']);
+    }
 
-        $accountData = Field::where('account_id', $accountId)->pluck('value', 'key');
+    $accountData = Field::where('account_id', $accountId)->pluck('value', 'key');
+    Log::info('Account data obtenida', [
+        'account_data_count' => $accountData->count(),
+        'account_data_keys' => $accountData->keys()->toArray()
+    ]);
 
-        if ($accountData) {
-            $fields = [
-                'Brief' => $brief,
-                '360_objective' => $objective,
-            ];
+    if ($accountData) {
+        $fields = [
+            'Brief' => $brief,
+            '360_objective' => $objective,
+        ];
 
-            foreach ($fields as $key => $value) {
-                if (!is_null($value)) {
-                    Field::updateOrCreate(
-                        ['account_id' => $accountId, 'key' => $key],
-                        ['value' => $value]
-                    );
-                }
+        foreach ($fields as $key => $value) {
+            if (!is_null($value)) {
+                Field::updateOrCreate(
+                    ['account_id' => $accountId, 'key' => $key],
+                    ['value' => $value]
+                );
             }
+        }
+        
+        Log::info('Campos guardados en la base de datos');
+        
+        try {
+            Log::info('Iniciando generación de insight');
+            $insightgenerado = $this->GenerarInsight($brief,$objective);
+            Log::info('Insight generado exitosamente', [
+                'insight_data_length' => strlen($insightgenerado['data']),
+                'insight_fuentes_count' => is_array($insightgenerado['fuentes']) ? count($insightgenerado['fuentes']) : 'no es array',
+                'insight_fuentes_type' => gettype($insightgenerado['fuentes'])
+            ]);
             
-            try {
-                $insightgenerado = $this->GenerarInsight($brief,$objective);
-                $insightdata = $insightgenerado['data'];
-                $insightfuentes = $insightgenerado['fuentes'];
+            $insightdata = $insightgenerado['data'];
+            $insightfuentes = $insightgenerado['fuentes'];
 
-            
             // Verificar si las fuentes existen y convertirlas en enlaces clickeables con comillas dobles
             if (is_array($insightfuentes) && !empty($insightfuentes)) {
                 $fuentesHTML = '<p><strong>Fuentes:</strong></p><ul><li>' . implode(
@@ -81,6 +120,9 @@ class Herramienta2Controller extends Controller
                 $fuentesHTML = '<p><strong>Fuentes:</strong> No se encontraron fuentes.</p>';
             }
 
+            Log::info('Fuentes HTML generadas', [
+                'fuentes_html_length' => strlen($fuentesHTML)
+            ]);
 
             Field::updateOrCreate(
                 [
@@ -110,6 +152,11 @@ $insightdata
 Analiza cuidadosamente la información disponible, además de los Insights poderosos que te servirán para nutrir el resultado, identifica los puntos clave relevantes para cada componente del GÉNESIS, y desarrolla una estrategia coherente y efectiva. Responde en español y presenta solo el resultado final del GÉNESIS sin notas o textos adicionales. Aquí tienes la información para lograrlo:
 
 EOT;
+
+            Log::info('Prompt preparado', [
+                'prompt_length' => strlen($prompt),
+                'prompt_preview' => substr($prompt, 0, 200) . '...'
+            ]);
 
             $system_prompt = <<<EOT
 Eres un experto en planificación estratégica publicitaria especializado en la metodología GÉNESIS (Generación Estratégica Neuroinspirada de Efectividad Sincronizada con Inteligencia Sintética) de god-ai (Objetivo cuantificado, Obstáculo identificado, Insight Aumentado, Desafío creativo). Esta metodología se utiliza para crear estrategias creativas publicitarios efectivas y consiste en los siguientes componentes:
@@ -176,21 +223,58 @@ Limpiar incluso lo que no se ve.
 
 EOT;
 
-            $model = "claude-3-7-sonnet-20250219";
+            // $model = "claude-3-7-sonnet-20250219";
+            $model = "claude-sonnet-4-20250514";
+            
             $temperature = 0.8;
+            
+            Log::info('Preparando llamada a AnthropicService', [
+                'model' => $model,
+                'temperature' => $temperature,
+                'system_prompt_length' => strlen($system_prompt)
+            ]);
+            
+            Log::info('Iniciando llamada a AnthropicService::TextGeneration');
             $response = AnthropicService::TextGeneration($prompt, $model, $temperature, $system_prompt);
-
-            return response()->json([
+           Log::info('Respuesta de AnthropicService recibida', [
+    'response_type' => gettype($response),
+    'response_keys' => is_array($response) ? array_keys($response) : 'no es array',
+    'response_data_length' => is_array($response) && isset($response['data']) ? strlen($response['data']) : 'no disponible',
+    'response_full' => $response // Agregar la respuesta completa para debugging
+]);
+// Verificar que la respuesta tenga los datos esperados
+if (!is_array($response) || !isset($response['data'])) {
+    Log::error('Respuesta inesperada de AnthropicService', [
+        'response' => $response,
+        'response_type' => gettype($response)
+    ]);
+    
+    return response()->json([
+        'error' => 'Respuesta inesperada del servicio de IA',
+        'details' => 'La respuesta no contiene los datos esperados',
+        'goto' => 2
+    ]);
+}
+            Log::info('Preparando respuesta final');
+            $finalResponse = [
                 'success' => 'Datos procesados correctamente.', 
                 'details' => array_merge($response, ['fuentes' => $fuentesResponse]),
                 'goto' => 3, 
                 'function' => 'generarGenesis'
+            ];
+            
+            Log::info('Respuesta final preparada', [
+                'response_keys' => array_keys($finalResponse)
             ]);
+
+            return response()->json($finalResponse);
 
         } catch (\Exception $e) {
             Log::error('Error al generar Genesis', [
                 'message' => $e->getMessage(),
                 'accountId' => $accountId,
+                'line' => $e->getLine(),
+                'file' => $e->getFile(),
                 'trace' => $e->getTraceAsString()
             ]);
             
@@ -201,7 +285,10 @@ EOT;
             ]);
         }
 
-    }else{
+    } else {
+        Log::error('No se encontraron datos de cuenta', [
+            'accountId' => $accountId
+        ]);
         return response()->json(['error' => 'faltan datos']);
     }
 }
@@ -307,7 +394,7 @@ Limpiar incluso lo que no se ve.
 EOT;
 
         try {
-            $model = "claude-3-7-sonnet-20250219";
+            $model = "claude-sonnet-4-20250514";
             $temperature = 0.8;
             $response = AnthropicService::TextGeneration($prompt, $model, $temperature, $system_prompt);
 
@@ -437,14 +524,14 @@ public function construccionescenario(Request $request){
 
             EOT;
 
-            $model = "claude-3-7-sonnet-20250219";
+            $model = "claude-sonnet-4-20250514";
             $temperature = 0.8;
             $response = AnthropicService::TextGeneration($prompt, $model, $temperature, $system_prompt);
 
-            Field::updateOrCreate(
-                ['account_id' => $accountId, 'key' => '360_construccionescenario'],
-                ['value' => $response['data']]
-            );
+            // Field::updateOrCreate(
+            //     ['account_id' => $accountId, 'key' => '360_construccionescenario'],
+            //     ['value' => $response['data']]
+            // );
 
             return response()->json(
             ['success' => 'Datos procesados correctamente.', 
@@ -542,7 +629,7 @@ public function regenerarConstruccionEscenario(Request $request){
 
             EOT;
 
-            $model = "claude-3-7-sonnet-20250219";
+            $model = "claude-sonnet-4-20250514";
             $temperature = 0.8;
             $response = AnthropicService::TextGeneration($prompt, $model, $temperature, $system_prompt);
 
@@ -587,17 +674,13 @@ public function eleccioncampania(Request $request){
         $objective = $accountData->get('360_objective');
         $genesis = $accountData->get('360_genesis');
 
-        Field::updateOrCreate(
-            ['account_id' => $accountId, 'key' => '360_construccionescenario'],
-            ['value' => $construccionescenario]
-        );
        
 
         // $prompt = "Tu función es generar un CONTEXTO, PROBLEMA, SOLUCIÓN y CONCEPTO usando estos datos. \nObjetivo: $objective\nProblema: $problema\nInsight: $insight\nReto: $reto\nConstrucción de escenario:";
         // $prompt .= "El formato que debes enviar la información es HTML";
 
         // $response = AnthropicService::TextGeneration($prompt);
-        return response()->json(['success' => 'Datos procesados correctamente.', 'details' => $genesis, 'goto' => 5]);
+        return response()->json(['success' => 'Datos procesados correctamente eleccioncampania.', 'details' => $genesis, 'goto' => 5]);
     }else{
         return response()->json(['error' => 'faltan datos']);
     }
@@ -605,6 +688,7 @@ public function eleccioncampania(Request $request){
 
 public function saveeleccioncampania(Request $request){
     // Validar las URLs y archivos
+    
     $validator = Validator::make($request->all(), [
         '360_Tipo_de_campaña' => 'required|string',
         'account' => 'required|integer',
@@ -616,15 +700,21 @@ public function saveeleccioncampania(Request $request){
 
     ini_set('max_execution_time', 300);
 
-    // $construccionescenario = $request->input('construccionescenario');
+    $construccionescenario = $request->input('construccionescenario');
+    $construccionescenariofinal = $construccionescenario;
     $accountId = $request->input('account');
     $account = Account::find($accountId);
-    
+    // Buscar el registro existente
+    Field::updateOrCreate(
+        ['account_id' => $accountId, 'key' => '360_construccionescenario'],
+        ['value' => $construccionescenariofinal]
+    );
     $accountData = Field::where('account_id', $accountId)->pluck('value', 'key');
     
 
     if ($accountData) {
-        // Buscar el registro existente
+        
+       
         $category = $account->category;
     Log::info("Categoria encontrada", [
         'Categoría' => $category,
@@ -785,10 +875,14 @@ public function generarCreatividad($Tipodecampaña, $objective, $genesiscompleto
     }
 
     // prompt
+
     $promptCreatividad = <<<EOT
 Genera las mejores propuestas creativas para una campaña de: $Tipodecampaña. Las propuestas deben considerar este objetivo cuantificable: $objective, el concepto creativo a considerar es: $genesiscompleto. Los datos de marca a considerar para hacer las mejores propuestas son: $brief
 EOT;
+   Log::info("Asistente enviado id:", [
 
+            'Asistente ID' => $assistant_idCreatividad
+        ]);
     return OpenAiService::CompletionsAssistants($promptCreatividad, $assistant_idCreatividad);
 }
 
@@ -887,6 +981,10 @@ El concepto creativo a considerar es:
 $genesiscompleto
 
 EOT;
+   Log::info("Asistente encontrado para la estrategia", [
+            'País del asistente' => $country,
+            'Asistente ID' => $assistant_id
+        ]);
 
     return OpenAiService::CompletionsAssistants($prompt, $assistant_id);
 }

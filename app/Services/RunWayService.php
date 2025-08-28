@@ -349,6 +349,11 @@ public static function generateGen3aTurboVideo(
     }
 }
 
+
+
+
+
+
 /**
  * Verifica el estado de generación de un video
  */
@@ -421,6 +426,147 @@ public static function checkVideoGenerationStatus($taskId)
         }
     } catch (\Exception $e) {
         Log::error("Error en checkVideoGenerationStatus: " . $e->getMessage());
+        return [
+            'success' => false,
+            'error' => $e->getMessage()
+        ];
+    }
+}
+
+/**
+ * Genera un video a partir de otro video usando la API de Runway video_to_video
+ */
+public static function generateVideoFromVideo(
+    string $videoUri,
+    string $promptText,
+    string $model = "gen4_aleph",
+    int $seed = 4294967295,
+    string $ratio = "1280:720",
+    array $references = [],
+    array $contentModeration = ["publicFigureThreshold" => "auto"],
+    int $duration = 5
+) {
+    try {
+        $apiKey = env('RUNWAY_API_KEY');
+        $url = "https://api.dev.runwayml.com/v1/video_to_video";
+
+        // Validaciones básicas
+        if (empty($videoUri)) {
+            return [
+                'success' => false,
+                'error' => 'La URI del video es requerida.'
+            ];
+        }
+
+        if (empty($promptText)) {
+            return [
+                'success' => false,
+                'error' => 'El texto del prompt es requerido.'
+            ];
+        }
+
+        // Validar modelo
+        $validModels = ['gen4_aleph'];
+        if (!in_array($model, $validModels)) {
+            return [
+                'success' => false,
+                'error' => 'Modelo no válido. Modelos disponibles: ' . implode(', ', $validModels)
+            ];
+        }
+
+        // Validar ratio - Ratios válidos según documentación RunWay API para gen4_aleph
+        $validRatios = [
+            '1280:720', '720:1280', '1104:832', '960:960', 
+            '832:1104', '1584:672', '848:480', '640:480'
+        ];
+        if (!in_array($ratio, $validRatios)) {
+            return [
+                'success' => false,
+                'error' => 'Ratio no válido. Ratios disponibles: ' . implode(', ', $validRatios)
+            ];
+        }
+
+        // Validar duración
+        if (!in_array($duration, [5, 10])) {
+            return [
+                'success' => false,
+                'error' => 'La duración debe ser 5 o 10 segundos.'
+            ];
+        }
+
+        // Construir el payload
+        $payload = [
+            "videoUri" => $videoUri,
+            "promptText" => $promptText,
+            "seed" => $seed,
+            "model" => $model,
+            "ratio" => $ratio,
+            "duration" => $duration,
+            "contentModeration" => $contentModeration
+        ];
+
+        // Agregar referencias si existen
+        if (!empty($references)) {
+            $payload["references"] = $references;
+        }
+
+        // Log para depuración
+        Log::info("Payload completo enviado a RunWay API", [
+            'payload' => $payload,
+            'ratio_enviado' => $ratio,
+            'duration_enviado' => $duration,
+            'model_enviado' => $model
+        ]);
+        
+        Log::info("Iniciando generación de video desde video", [
+            'videoUri' => $videoUri,
+            'model' => $model,
+            'ratio' => $ratio,
+            'duration' => $duration,
+            'references_count' => count($references)
+        ]);
+
+        $data_string = json_encode($payload);
+
+        $ch = curl_init();
+        curl_setopt($ch, CURLOPT_URL, $url);
+        curl_setopt($ch, CURLOPT_HTTPHEADER, [
+            'Content-Type: application/json',
+            'Authorization: Bearer ' . $apiKey,
+            'X-Runway-Version: 2024-11-06'
+        ]);
+        curl_setopt($ch, CURLOPT_POST, 1);
+        curl_setopt($ch, CURLOPT_POSTFIELDS, $data_string);
+        curl_setopt($ch, CURLOPT_RETURNTRANSFER, true);
+
+        $response = curl_exec($ch);
+        $status = curl_getinfo($ch, CURLINFO_HTTP_CODE);
+        curl_close($ch);
+
+        $responseBody = json_decode($response, true);
+
+        // Log de la respuesta
+        Log::info("Respuesta de video_to_video", [
+            'statusCode' => $status,
+            'response' => $responseBody
+        ]);
+
+        if ($status >= 200 && $status < 300) {
+            return [
+                'success' => true,
+                'data' => $responseBody
+            ];
+        } else {
+            return [
+                'success' => false,
+                'error' => $responseBody['error'] ?? 'Error desconocido',
+                'statusCode' => $status,
+                'response' => $responseBody
+            ];
+        }
+
+    } catch (\Exception $e) {
+        Log::error("Error en generateVideoFromVideo: " . $e->getMessage());
         return [
             'success' => false,
             'error' => $e->getMessage()

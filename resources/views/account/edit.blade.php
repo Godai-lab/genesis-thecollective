@@ -17,6 +17,13 @@ $categorias = [
     ["id" => "Hogar y Decoración", "name" => "Hogar y Decoración"],
     ["id" => "Servicios Financieros", "name" => "Servicios Financieros"],
     ["id" => "Energía y Sostenibilidad", "name" => "Energía y Sostenibilidad"],
+    ["id" => "Agronegocios y Agroindustria", "name" => "Agronegocios y Agroindustria"],
+    ["id" => "Medios, Comunicación y Contenido Digital", "name" => "Medios, Comunicación y Contenido Digital"],
+    ["id" => "Logística y Cadena de Suministro", "name" => "Logística y Cadena de Suministro"],
+    ["id" => "Emprendimiento e Innovación", "name" => "Emprendimiento e Innovación"],
+    ["id" => "Arte, Cultura y Creatividad", "name" => "Arte, Cultura y Creatividad"],
+    ["id" => "Negocios B2B y Servicios Industriales", "name" => "Negocios B2B y Servicios Industriales"],
+    ["id" => "Gaming y eSports", "name" => "Gaming y eSports"],
     ["id" => "Otra", "name" => "Otra categoría"],
 ];
 

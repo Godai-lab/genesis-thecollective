@@ -853,6 +853,7 @@ public function generarCreatividad($Tipodecampaña, $objective, $genesiscompleto
         'Arte, Cultura y Creatividad'              => 'asst_FW8JGyhxYi7H2ICAZZejJ3EX',
         'Negocios B2B y Servicios Industriales'    => 'asst_RqZhkeC0xGoCCYSKGJd4kHZr',
         'Gaming y eSports'                         => 'asst_KkeCs6HRWNYyiqWMa4JgSSmo',
+        'Otra'                                     => 'asst_dBtNQk8BArQyo9GNndD19lEQ',
     ];
     
 

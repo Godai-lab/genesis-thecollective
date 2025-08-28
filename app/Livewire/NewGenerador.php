@@ -108,9 +108,7 @@ public function limpiarImagenesTemporales()
     
     public function cambiarModoEdicion($modo)
     {
-        session()->forget('error');
         if (in_array($modo, ['expand', 'fill'])) {
-// $this->verificarLimitesServicio();
             $this->modoEdicion = $modo;
         }
     }
@@ -381,11 +379,6 @@ public function expandirImagenFlux($datos)
         $this->isGenerating = true;
         $this->fluxGenerating = true;
 // dd($this->promptExpansion);
- // Verificar límites de uso para el servicio seleccionado
-        if ($this->verificarLimitesServicio()) {
-            // Si devuelve true, significa que se ha alcanzado el límite
-            return;
-        }
         // Verificar que hay una imagen seleccionada
         if (empty($this->imageFiles) || count($this->imageFiles) === 0) {
             Log::warning('No se ha seleccionado ninguna imagen para expandir');
@@ -659,6 +652,10 @@ public function expandirImagenFlux($datos)
                     
                     $this->servicioImagen = 'flux-kontext-max'; 
                     break;
+                case 'editvideo':
+                    
+                    $this->servicioImagen = 'video-editor'; 
+                    break;
                 
                
             }
@@ -668,6 +665,15 @@ public function expandirImagenFlux($datos)
             // Verificar límites inmediatamente al cambiar el servicio
             $this->verificarLimitesServicio();
         }
+    }
+
+    public function abrirEditorVideo($videoUrl)
+    {
+        // Cambiar al modo de edición de video
+        $this->tipo = 'editvideo';
+        
+        // Guardar la URL del video para pasarla al editor
+        session()->flash('videoUrl', $videoUrl);
     }
     
     /**
@@ -687,6 +693,9 @@ public function expandirImagenFlux($datos)
             break;
              case 'editimagen':
             $this->serviciosDisponibles = $this->serviciosEditImagen;
+            break;
+            case 'editvideo':
+            $this->serviciosDisponibles = [];
             break;
         default:
             $this->serviciosDisponibles = [];
@@ -725,6 +734,11 @@ public function expandirImagenFlux($datos)
      */
     public function seleccionarServicioImagen($servicio)
     {
+        // Si el tipo es editvideo, no permitir cambiar el servicio
+        if ($this->tipo === 'editvideo') {
+            return;
+        }
+        
         if (isset($this->serviciosDisponibles[$servicio])) {
             // Si cambiamos de servicio, limpiar las imágenes específicas
             if ($this->servicioImagen !== $servicio) {
@@ -955,6 +969,7 @@ public function generarPrompt($datos)
             
             switch ($this->servicioImagen) {
                 case 'gemini':
+                case 'gemini4':
                     return $this->generarImagenGemini($promptCompleto, $aspectRatio, $datos['cantidad']);
                 case 'openai':
                     return $this->generarImagenOpenAI($promptCompleto, $aspectRatio, $datos['cantidad']);
@@ -1180,10 +1195,14 @@ public function generarPrompt($datos)
      */
     private function generarImagenGemini($prompt, $aspectRatio, $cantidad)
     {
-        // Generar la imagen con Gemini
+        // Determinar el modelo según la selección del usuario
+        $modelo = $this->servicioImagen === 'gemini4'
+            ? 'imagen-4.0-generate-preview-06-06'
+            : 'imagen-3.0-generate-002';
+        // Generar la imagen con Gemini usando el modelo seleccionado
         $response = GeminiService::generateImage(
             $prompt,
-            "imagen-3.0-generate-002",
+            $modelo,
             $cantidad,
             $aspectRatio,
             "ALLOW_ADULT"
@@ -1262,7 +1281,7 @@ public function generarPrompt($datos)
         
         
         // Iniciar la generación de la imagen con Flux
-        $response = FluxService::GenerateImageKontextPro(
+        $response = FluxService::GenerateImageKontext(
             $modelo,
             $prompt,
             $aspect,
@@ -3009,17 +3028,22 @@ public function rellenarImagenFlux($datos)
          set_time_limit(180); // 3 minutos
         // Limpiar errores previos
         $this->fillError = '';
+        // dd($datos);
+//         if($datos){
+//  $this->dispatch('verificarEstadoFlux', [
+//                 'generationId' => 'acc15502-8e87-44e3-964a-5efd5222c721',
+//                 'prompt' => $this->promptFill,
+//                 'type' => 'fill'
+//             ]);
+//             return;
+//         }
        
         session()->forget('fill_error');
         
         Log::info('Iniciando método rellenarImagenFlux');
         $this->isGenerating = true;
         $this->fluxGenerating = true;
- // Verificar límites de uso para el servicio seleccionado
-        if ($this->verificarLimitesServicio()) {
-            // Si devuelve true, significa que se ha alcanzado el límite
-            return;
-        }
+
         // Verificar que tenemos una imagen base y una máscara
         if (empty($datos['imageBase64'])) {
             Log::info('No se encontró imagen base');
@@ -3135,7 +3159,6 @@ public function verificarLimitesServicioold()
 {
     // Limpiar cualquier mensaje de error anterior
     session()->forget('error');
-    session()->forget('fill_error');
     
     // Obtener el nombre del servicio actual
     $serviceName = $this->getServiceNameForTracking();
@@ -3154,17 +3177,8 @@ public function verificarLimitesServicioold()
         
         $message = "Has alcanzado tu límite mensual de solicitudes para este servicio.";
         // $message .= " Uso actual: $usage solicitudes.";
-        switch ($this->modoEdicion) {
-            case 'expand':
-            case 'fill':
-                session()->flash('fill_error', $message);
-                break;
-            
-            default:
-                session()->flash('error', $message);
-                break;
-        }
         
+        session()->flash('error', $message);
         $this->dispatch('errorOcurrido');
         return true;
     }
@@ -3199,6 +3213,8 @@ private function getServiceNameForTracking(): string
         };
     } elseif ($this->tipo === 'gprompt') {
         return 'prompt-generation';
+    } elseif ($this->tipo === 'editvideo') {
+        return 'video-editor';
     } else {
         return 'servicio-generico';
     }

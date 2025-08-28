@@ -702,7 +702,7 @@
                       
             <!-- Selector de tipo (imagen/video) - ahora fijo -->
             {{-- <div class="type-selector {{ !empty($chatHistory) ? 'type-selector-fixed' : '' }}"> --}}
-                <div class="type-selector-fixed">
+            <div class="type-selector-fixed">
 
                 <div class="flex justify-center bg-gray-100 rounded-full p-1 w-fit mx-auto shadow-sm">
                      @can('haveaccess','generador.imagen')
@@ -748,6 +748,16 @@
                         </svg>
                     </button>
                     @endcan
+                    @can('haveaccess','generador.video')
+                    <button 
+                        wire:click="cambiarTipo('editvideo')"
+                        class="flex items-center justify-center rounded-full p-2 {{ $tipo === 'editvideo' ? 'bg-black text-white' : 'text-gray-500' }} mx-1 transition-colors"
+                    >
+                        <svg xmlns="http://www.w3.org/2000/svg" class="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M11 5H6a2 2 0 00-2 2v12a2 2 0 002 2h12a2 2 0 002-2v-5M18.5 2.5a2.121 2.121 0 113 3L12 15l-4 1 1-4 9.5-9.5z" />
+                        </svg>
+                    </button>
+                    @endcan
                 </div>
                              @if($tipo === 'editimagen')
         <div class="flex justify-center mt-3">
@@ -785,7 +795,7 @@
             </div>
         </div>
     @endif
-                </div>
+            </div>
             
             <!-- Contenido principal con clase para compensar el espacio del selector fijo -->
             <div class="w-full max-w-4xl px-4 mx-auto main-content-container">
@@ -805,6 +815,9 @@
 
             @case('gprompt')
                  <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M11 5H6a2 2 0 00-2 2v12a2 2 0 002 2h12a2 2 0 002-2v-5M18.5 2.5a2.121 2.121 0 113 3L12 15l-4 1 1-4 9.5-9.5z" /> <!-- Ejemplo de icono para prompt -->
+                @break
+            @case('editvideo')
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 10l4.553-2.276A1 1 0 0121 8.618v6.764a1 1 0 01-1.447.894L15 14M5 18h8a2 2 0 002-2V8a2 2 0 00-2-2H5a2 2 0 00-2 2v8a2 2 0 002 2z" />
                 @break
                 
 
@@ -828,6 +841,9 @@
                 @break
             @case('editimagen')
                Editor de imagenes
+                @break
+            @case('editvideo')
+               Editor de Videos
                 @break
 
             @default
@@ -1186,27 +1202,7 @@
 
 <!--Inicio Área de rellenar imagen -->  
 <div x-data="fillImage()" class="max-w-xl mx-auto mt-8" x-show="$wire.tipo ==='editimagen' && $wire.modoEdicion==='fill'">
-        <!-- Mensaje de error específico para fill -->
-        @if(session()->has('fill_error') || !empty($fillError))
-            <div class="error-message items-start mb-4 p-3 rounded-lg bg-red-50 border border-red-200">
-                <svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5 mr-2 text-red-500 flex-shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 8v4m0 4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
-                </svg>
-                <div class="text-red-700 flex-1">
-                    <p class="font-medium">Error en el rellenado</p>
-                    <p class="text-sm">{{ session('fill_error') ?? $fillError }}</p>
-                </div>
-                <button 
-                    wire:click="clearFillError" 
-                    class="ml-auto text-red-400 hover:text-red-600 flex-shrink-0"
-                    title="Cerrar error"
-                >
-                    <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12" />
-                    </svg>
-                </button>
-            </div>
-        @endif
+     
     <!-- Drag & Drop -->
     <div 
         x-show="!imageSrc"
@@ -1314,6 +1310,28 @@
             </button>
         </div>
 
+        <!-- Mensaje de error específico para fill -->
+        @if(session()->has('fill_error') || !empty($fillError))
+            <div class="error-message items-start mb-4 p-3 rounded-lg bg-red-50 border border-red-200">
+                <svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5 mr-2 text-red-500 flex-shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 8v4m0 4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
+                </svg>
+                <div class="text-red-700 flex-1">
+                    <p class="font-medium">Error en el rellenado</p>
+                    <p class="text-sm">{{ session('fill_error') ?? $fillError }}</p>
+                </div>
+                <button 
+                    wire:click="clearFillError" 
+                    class="ml-auto text-red-400 hover:text-red-600 flex-shrink-0"
+                    title="Cerrar error"
+                >
+                    <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12" />
+                    </svg>
+                </button>
+            </div>
+        @endif
+
         <!-- Controles fijos en la parte inferior -->
         <div class="fixed bottom-0 left-1/2 transform -translate-x-1/2 w-full max-w-2xl z-50 bg-white shadow-2xl border-t border-gray-200 px-4 py-3">
             <div class="flex flex-wrap md:flex-nowrap items-stretch gap-2 justify-center">
@@ -1419,10 +1437,24 @@
     </div>
 </div>
 <!--Fin Área de rellenar imagen -->
+
+<!--Incio Área de editor de videos -->  
+<div x-show="$wire.tipo === 'editvideo'">
+    @livewire('video-editor')
+</div>
+<!--Fin Área de editor de videos -->
                 @if(empty($chatHistory))
                 @if(session()->has('error'))
-                        
-                        <div x-show="$wire.modoEdicion !== 'expand' && $wire.modoEdicion !== 'fill'" class="error-message flex items-center my-4 p-4 bg-red-50 border border-red-200 text-red-700 sticky top-[70px] z-20 shadow-md rounded-lg overflow-hidden relative">
+                        {{-- <div class="error-message flex items-center my-4 sticky top-[70px] z-20">
+                            <svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5 mr-2" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                             <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 8v4m0 4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
+                            </svg>
+                            <div>
+                                <p class="font-medium">Error en la generación</p>
+                                <p>{{ session('error') }}</p>
+                            </div>
+                        </div> --}}
+                        <div class="error-message flex items-center my-4 p-4 bg-red-50 border border-red-200 text-red-700 sticky top-[70px] z-20 shadow-md rounded-lg overflow-hidden relative">
                         <div class="flex items-start space-x-3 w-full pr-8">
                             <svg xmlns="http://www.w3.org/2000/svg" class="h-6 w-6 text-red-500 mt-0.5 flex-shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                                 <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 8v4m0 4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
@@ -1439,9 +1471,9 @@
                         </button>
                         </div>
                     @endif
-                    <div class="mb-4" x-show="$wire.modoEdicion !== 'expand' && $wire.modoEdicion !== 'fill' ">
+                    <div class="mb-4" x-show="$wire.modoEdicion !== 'expand' && $wire.modoEdicion !== 'fill' && $wire.tipo !== 'editvideo' ">
 
-                        <div  id="cajaherramienta" class="input-container bg-black rounded-xl p-4 shadow-lg" x-show="$wire.modoEdicion !== 'expand'">
+                        <div  id="cajaherramienta" class="input-container bg-black rounded-xl p-4 shadow-lg" x-show="$wire.modoEdicion !== 'expand' && $wire.tipo !== 'editvideo'">
                             
                             <div class="relative bg-white rounded-lg">
                                 <textarea 
@@ -1459,6 +1491,10 @@
 
                                         @case('gprompt')
                                             placeholder="Describe un prompt para generar..."
+                                            @break
+
+                                        @case('editvideo')
+                                            placeholder="Editor de videos..."
                                             @break
 
                                         @default
@@ -1611,8 +1647,8 @@
                                         </div>
                                     </div>
                                     
-                                    <!-- Selector de cantidad de imágenes (solo mostrar para Gemini y Openai) -->
-                                    <div x-data="{ open: false }" class="relative" x-show="$wire.tipo === 'imagen' && $wire.servicioImagen === 'gemini' ||$wire.tipo === 'imagen'&& $wire.servicioImagen === 'openai'">
+                                    <!-- Selector de cantidad de imágenes (mostrar para Gemini3, Gemini4 y OpenAI) -->
+                                    <div x-data="{ open: false }" class="relative" x-show="($wire.tipo === 'imagen') && ($wire.servicioImagen === 'gemini' || $wire.servicioImagen === 'gemini4' || $wire.servicioImagen === 'openai')">
                                         <button 
                                             @click="open = !open"
                                             class="flex items-center space-x-1 bg-gray-100 hover:bg-gray-200 rounded-full px-3 py-1 text-sm shadow-sm"
@@ -1865,12 +1901,20 @@
                 @else
                 <!--seccion cuando hay algo generado-->
                    <!--Inicio seccion generado-->
-                <div x-show="$wire.modoEdicion !== 'expand' && $wire.modoEdicion !== 'fill'">
+                <div x-show="$wire.modoEdicion !== 'expand' && $wire.modoEdicion !== 'fill' && $wire.tipo !== 'editvideo'">
                     <!-- Mensaje de error justo antes de la galería, pero después del área de entrada -->
                     
                     @if(session()->has('error'))
-                        
-                        <div x-show="$wire.modoEdicion !== 'expand' && $wire.modoEdicion !== 'fill'" class="error-message flex items-center my-4 p-4 bg-red-50 border border-red-200 text-red-700 sticky top-[70px] z-20 shadow-md rounded-lg overflow-hidden relative">
+                        {{-- <div class="error-message flex items-center my-4 sticky top-[70px] z-20">
+                            <svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5 mr-2" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                             <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 8v4m0 4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
+                            </svg>
+                            <div>
+                                <p class="font-medium">Error en la generación</p>
+                                <p>{{ session('error') }}</p>
+                            </div>
+                        </div> --}}
+                        <div class="error-message flex items-center my-4 p-4 bg-red-50 border border-red-200 text-red-700 sticky top-[70px] z-20 shadow-md rounded-lg overflow-hidden relative">
                         <div class="flex items-start space-x-3 w-full pr-8">
                             <svg xmlns="http://www.w3.org/2000/svg" class="h-6 w-6 text-red-500 mt-0.5 flex-shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                                 <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 8v4m0 4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
@@ -1957,15 +2001,26 @@
                                                         Tu navegador no soporta la etiqueta de video.
                                                     </video>
                                                    
-                                                    <button 
-                                                        onclick="downloadVideo('{{ $mensaje['url'] }}', 'video_generado_{{ $index }}.mp4')"
-                                                        class="absolute bottom-2 right-2 bg-black bg-opacity-70 hover:bg-opacity-100 text-white rounded-lg px-2 py-1 text-xs shadow-sm inline-flex items-center cursor-pointer"
-                                                    >
-                                                        <svg xmlns="http://www.w3.org/2000/svg" class="h-3 w-3 mr-1" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                                                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4" />
-                                                        </svg>
-                                                        Descargar
-                                                    </button>
+                                                    <div class="absolute bottom-2 right-2 flex space-x-2">
+                                                        <button 
+                                                            wire:click="abrirEditorVideo('{{ $mensaje['url'] }}')"
+                                                            class="bg-blue-600 bg-opacity-70 hover:bg-opacity-100 text-white rounded-lg px-2 py-1 text-xs shadow-sm inline-flex items-center cursor-pointer"
+                                                        >
+                                                            <svg xmlns="http://www.w3.org/2000/svg" class="h-3 w-3 mr-1" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M11 5H6a2 2 0 00-2 2v12a2 2 0 002 2h12a2 2 0 002-2v-5M18.5 2.5a2.121 2.121 0 113 3L12 15l-4 1 1-4 9.5-9.5z" />
+                                                            </svg>
+                                                            Editar Video
+                                                        </button>
+                                                        <button 
+                                                            onclick="downloadVideo('{{ $mensaje['url'] }}', 'video_generado_{{ $index }}.mp4')"
+                                                            class="bg-black bg-opacity-70 hover:bg-opacity-100 text-white rounded-lg px-2 py-1 text-xs shadow-sm inline-flex items-center cursor-pointer"
+                                                        >
+                                                            <svg xmlns="http://www.w3.org/2000/svg" class="h-3 w-3 mr-1" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4" />
+                                                            </svg>
+                                                            Descargar
+                                                        </button>
+                                                    </div>
                                                 {{-- @else
                                                     <img src="{{ $mensaje['url'] }}" alt="Imagen generada" class="w-full h-auto rounded-lg shadow-md">
                                                     <div class="absolute bottom-2 right-2 flex space-x-2">
@@ -2041,7 +2096,7 @@
                         <!-- Fin Sección de spinner de Generando -->
                     </div>
                   
-                    <div class="input-container bg-black rounded-b-xl p-2 shadow-lg">
+                    <div class="input-container bg-black rounded-b-xl p-2 shadow-lg" x-show="$wire.tipo !== 'editvideo'">
                         <div class="relative bg-white rounded-lg">
                              <textarea 
                                     wire:model="prompt" 
@@ -2058,6 +2113,10 @@
 
                                         @case('gprompt')
                                             placeholder="Describe un prompt para generar..."
+                                            @break
+
+                                        @case('editvideo')
+                                            placeholder="Editor de videos..."
                                             @break
 
                                         @default
@@ -2210,8 +2269,8 @@
                                     </div>
                                 </div>
                                 
-                                <!-- Selector de cantidad de imágenes (solo mostrar para Gemini y Openai) -->
-                                <div x-data="{ open: false }" class="relative" x-show="$wire.tipo === 'imagen' && $wire.servicioImagen === 'gemini' ||$wire.tipo === 'imagen'&& $wire.servicioImagen === 'openai'">
+                                <!-- Selector de cantidad de imágenes (mostrar para Gemini3, Gemini4 y OpenAI) -->
+                                <div x-data="{ open: false }" class="relative" x-show="($wire.tipo === 'imagen') && ($wire.servicioImagen === 'gemini' || $wire.servicioImagen === 'gemini4' || $wire.servicioImagen === 'openai')">
                                     <button 
                                         @click="open = !open"
                                         class="flex items-center space-x-1 bg-gray-100 hover:bg-gray-200 rounded-full px-3 py-1 text-sm shadow-sm"
@@ -2489,7 +2548,7 @@
     @endif
 
     <!-- contenedor fijo en la parte inferior izquierda para los selectores -->
-    <div class="fixed bottom-6 left-6 z-30 model-selector-container" x-show="$wire.tipo !== 'gprompt' && $wire.modoEdicion !== 'expand'" >
+    <div class="fixed bottom-6 left-6 z-30 model-selector-container" x-show="$wire.tipo !== 'gprompt' && $wire.modoEdicion !== 'expand' && $wire.tipo !== 'editvideo'" >
     <div class="flex flex-col space-y-2 bg-white rounded-xl p-3 shadow-lg border border-gray-200">
         <!-- Selector de modelo de IA -->
         <div x-data="{ open: false }" class="relative">
@@ -2501,7 +2560,7 @@
                         <svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5 mr-2 text-blue-600" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                             <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 10V3L4 14h7v7l9-11h-7z" />
                         </svg>
-                    <span>{{ $serviciosDisponibles[$servicioImagen] }}</span>
+                    <span>{{ $tipo === 'editvideo' ? 'Editor de Videos' : ($serviciosDisponibles[$servicioImagen] ?? 'Seleccionar') }}</span>
                 </div>
                 <svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                     <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7" />
@@ -2517,7 +2576,7 @@
             >
                 <div class="text-center mb-2 text-gray-600 font-medium">Modelo de IA</div>
                 <div class="grid grid-cols-1 gap-2">
-                    @foreach($serviciosDisponibles as $key => $label)
+                    {{-- @foreach($serviciosDisponibles as $key => $label)
                         <button 
                             wire:click="{{ $key !== 'gemini4' ? "seleccionarServicioImagen('$key')" : '' }}"
                             @click="open = false"
@@ -2539,8 +2598,8 @@
                                 </svg>
                             @endif
                         </button>
-                    @endforeach
-                    {{-- @foreach($serviciosDisponibles as $key => $label)
+                    @endforeach --}}
+                    @foreach($serviciosDisponibles as $key => $label)
                         <button 
                             wire:click="seleccionarServicioImagen('{{ $key }}')"
                             @click="open = false"
@@ -2554,7 +2613,7 @@
                                 </svg>
                             @endif
                         </button>
-                    @endforeach --}}
+                    @endforeach
                 </div>
             </div>
         </div>
@@ -2612,7 +2671,6 @@
 // Envolver todo el código en el evento livewire:init
 document.addEventListener('livewire:init', () => {
 
-    // Agregar este nuevo listener en la sección de eventos de Livewire (alrededor de la línea 2380)
 
 // Evento específico para scroll cuando se genera una imagen expandida
 Livewire.on('scrollToExpandedImage', () => {
@@ -3371,12 +3429,12 @@ togglePreview() {
             // 🔧 VALIDACIONES QUE RETORNAN FALSE SI FALLAN
             if (!this.canvas || !this.imageLoaded) {
                 alert('No hay imagen cargada');
-                return false; //  Validación fallida
+                return false; // ❌ Validación fallida
             }
 
             if (this.paintedPixels.size === 0) {
                 alert('No has marcado ninguna área para rellenar');
-                return false; //  Validación fallida
+                return false; // ❌ Validación fallida
             }
 
             // 🔧 GUARDAR ESTADO ANTES DE PROCESAR

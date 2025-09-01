@@ -25,6 +25,7 @@ $servicios = [
     // Servicios de Edición de Imágenes
     ["id" => "edicion-flux-expand", "name" => "Edición - Flux Expandir Imagen"],
     ["id" => "edicion-flux-fill", "name" => "Edición - Flux Rellenar Imagen"],
+    ["id" => "edit-video", "name" => "Edición - Video Editor"],
     // Servicios  de Generacion de prompts
     ["id" => "prompt-generation", "name" => "Prompt - Generar Prompt-OpenAi"],
 ];

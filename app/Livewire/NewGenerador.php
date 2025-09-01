@@ -654,7 +654,7 @@ public function expandirImagenFlux($datos)
                     break;
                 case 'editvideo':
                     
-                    $this->servicioImagen = 'video-editor'; 
+                    $this->servicioImagen = 'edit-video'; 
                     break;
                 
                
@@ -3214,7 +3214,7 @@ private function getServiceNameForTracking(): string
     } elseif ($this->tipo === 'gprompt') {
         return 'prompt-generation';
     } elseif ($this->tipo === 'editvideo') {
-        return 'video-editor';
+        return 'edit-video';
     } else {
         return 'servicio-generico';
     }

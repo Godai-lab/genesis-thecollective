@@ -8,6 +8,8 @@ use Livewire\Attributes\On;
 use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Facades\Storage;
+use App\Models\ServiceUsages;
+use App\Models\PlanServiceLimits;
 use Exception;
 
 class VideoEditor extends Component
@@ -238,27 +240,62 @@ class VideoEditor extends Component
         }
     }
 
+    private function verificarLimitesServicio()
+    {
+        try {
+            // Limpiar cualquier mensaje de error anterior
+            session()->forget('error');
+            
+            // Obtener el nombre del servicio actual
+            $serviceName = 'edit-video';
+            
+            // Verificar si el usuario ha alcanzado el límite usando el mismo método que NewGenerador
+            if (ServiceUsages::hasReachedLimit(Auth::id(), $serviceName)) {
+                $limit = ServiceUsages::getMonthlyLimit(Auth::id(), $serviceName);
+                $usage = ServiceUsages::getCurrentUsage(Auth::id(), $serviceName);
+                
+                $message = "Has alcanzado tu límite mensual de solicitudes para este servicio.";
+                $this->errorMessage = $message;
+                
+                // Hacer scroll hacia abajo para que el usuario vea el error
+                $this->dispatch('scroll-to-bottom');
+                
+                return false;
+            }
+            
+            return true;
+        } catch (Exception $e) {
+            Log::error("Error en verificarLimitesServicio: " . $e->getMessage());
+            $this->errorMessage = 'Error al verificar límites del servicio';
+            
+            // Hacer scroll hacia abajo para que el usuario vea el error
+            $this->dispatch('scroll-to-bottom');
+            
+            return false;
+        }
+    }
+
+    private function registrarUsoServicio()
+    {
+        try {
+            // Registrar el uso del servicio usando el mismo método que NewGenerador
+            ServiceUsages::incrementRequestCount(Auth::id(), 'edit-video', 1);
+            return true;
+        } catch (Exception $e) {
+            Log::error('Error al registrar uso del servicio: ' . $e->getMessage());
+            return false;
+        }
+    }
+
     public function procesarVideo()
     {
+        Log::info("Iniciando procesarVideo en VideoEditor");
         
-        // if ($this->transformSettings['promptText']){
-        //     // $this->errorMessage = 'Debes escribir un prompt para la transformación';
-        //     $this->editedVideos[] = [
-        //         'type' => 'transform',
-        //         'settings' => $this->transformSettings,
-        //         'taskId' => "7f0ef0a2-3e95-4df1-97d6-7e738a9f65c5",
-        //         'status' => 'processing'
-        //     ];
-        //     //  dd($this->videoUrl);
-        //     Log::info("Transformación de video iniciada", [
-        //         'taskId' => $result['data']['id'] ?? null,
-        //         'settings' => $this->transformSettings
-        //     ]);
-        //     $this->dispatch('scroll-to-bottom');
-        //     // Iniciar el polling para verificar el estado
-        //     $this->startPolling();
-        //     return;
-        // }
+        // Verificar límites del servicio antes de procesar
+        if (!$this->verificarLimitesServicio()) {
+            Log::info("Límites no verificados, retornando");
+            return;
+        }
         if (!$this->videoToEdit) {
             $this->errorMessage = 'No hay video seleccionado para editar';
             return;
@@ -310,13 +347,19 @@ class VideoEditor extends Component
             if ($result['success']) {
                 // Agregar el resultado al historial SOLO cuando tengamos la URL final
                 // Por ahora solo guardamos la información básica
-                $this->editedVideos[] = [
-                    'type' => 'transform',
-                    'settings' => $this->transformSettings,
-                    'taskId' => $result['data']['id'] ?? null,
-                    'status' => 'processing'
-                ];
-                $this->saveEditedVideosToSession();
+                // Registrar el uso del servicio
+                if ($this->registrarUsoServicio()) {
+                    $this->editedVideos[] = [
+                        'type' => 'transform',
+                        'settings' => $this->transformSettings,
+                        'taskId' => $result['data']['id'] ?? null,
+                        'status' => 'processing'
+                    ];
+                    $this->saveEditedVideosToSession();
+                } else {
+                    $this->errorMessage = 'Error al registrar el uso del servicio';
+                    return;
+                }
                 
                 Log::info("Transformación de video iniciada", [
                     'taskId' => $result['data']['id'] ?? null,

@@ -30,7 +30,7 @@ class PerplexityService
                 'model' => $model,
                 'messages' => $prompt,
                 'temperature' => $temperature,
-                'max_tokens' => 64000 
+                // 'max_tokens' => 64000 
             );
 
             $data_string = json_encode($data);

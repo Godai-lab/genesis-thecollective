@@ -118,18 +118,33 @@ class InvestigacionController extends Controller
 
     try {
         $respuestaper = $this->callPerplexity($country, $brand, $instruccion);
+        
+        // VALIDAR SI HAY ERROR
+        if (isset($respuestaper['error']) && !empty($respuestaper['error'])) {
+            Log::error('Error en callPerplexity', [
+                'error' => $respuestaper['error']
+            ]);
+            
+            return response()->json([
+                'success' => false,
+                'error' => $respuestaper['error']
+            ], 500);
+        }
+        
+        // VALIDAR SI HAY DATA
+        if (!isset($respuestaper['data']) || empty($respuestaper['data'])) {
+            return response()->json([
+                'success' => false,
+                'error' => 'No se recibió contenido de la investigación. Por favor, intenta nuevamente.'
+            ], 500);
+        }
+        
         $fuentes = $respuestaper['fuentes'] ?? [];
 
-        // Convertimos las fuentes a una lista numerada con enlaces
-       // Convertimos las fuentes a una lista numerada con enlaces en líneas separadas
+        // Convertimos las fuentes a una lista numerada con enlaces en líneas separadas
         $fuentesFormatted = !empty($fuentes)
         ? "<p>" . implode("</p><p>", array_map(fn($fuente, $index) => ($index + 1) . ". <a href=\"$fuente\" target=\"_blank\">$fuente</a>", $fuentes, array_keys($fuentes))) . "</p>"
         : "<p>No se encontraron fuentes.</p>";
-
-
-        if (!isset($respuestaper['data'])) {
-            throw new \Exception('La respuesta no contiene la clave \"data\".');
-        }
 
         // Limpiar el contenido dentro de las etiquetas <think>
         $investigacionData = preg_replace('/<think>.*?<\/think>/s', '', $respuestaper['data']);
@@ -143,9 +158,14 @@ class InvestigacionController extends Controller
             'goto' => 3
         ]);
     } catch (\Exception $e) {
+        Log::error('Error en generarInvestigacion', [
+            'error' => $e->getMessage(),
+            'trace' => $e->getTraceAsString()
+        ]);
+        
         return response()->json([
             'success' => false,
-            'error' => 'Error al generar la investigación: ' . $e->getMessage()
+            'error' => 'Error inesperado al generar la investigación. Por favor, intenta nuevamente más tarde.'
         ], 500);
     }
 }
@@ -209,26 +229,56 @@ try {
     $model = "sonar-deep-research";
     $temperature = 0.5;
     $response = PerplexityService::ChatCompletions($prompt, $model, $temperature, $system_prompt);
-// Log completo de la respuesta de Perplexity
+    
+    // Log completo de la respuesta de Perplexity
     Log::info('Respuesta PerplexityService::ChatCompletions', [
         'response' => $response
     ]); 
-    if (!isset($response['data'])) {
-        Log::error('La respuesta de ChatCompletions no contiene la clave "data"', [
+    
+    // VALIDAR PRIMERO SI HAY ERROR
+    if (isset($response['error'])) {
+        Log::error('Error en respuesta de Perplexity', [
+            'error' => $response['error'],
+        ]);
+        // DEVOLVER ARRAY, NO JsonResponse
+        return [
+            'error' => 'Error al obtener datos de la IA: ' . 
+                      ($response['error'] ?? 'Respuesta inesperada del servicio'),
+            'data' => null,
+            'fuentes' => []
+        ];
+    }
+    
+    // VALIDAR SI EXISTE DATA
+    if (!isset($response['data']) || empty($response['data'])) {
+        Log::error('La respuesta de ChatCompletions no contiene datos válidos', [
             'response' => $response,
         ]);
-        return response()->json([
-            'error' => 'Error al obtener datos de la IA. Por favor, intenta nuevamente.'
-        ], 500);
+        // DEVOLVER ARRAY, NO JsonResponse
+        return [
+            'error' => 'No se recibieron datos válidos de la IA. Por favor, intenta nuevamente.',
+            'data' => null,
+            'fuentes' => []
+        ];
     }
 
-    return array('data' =>  $response['data'],'fuentes'=>$response['citations']);
+    return [
+        'data' => $response['data'],
+        'fuentes' => $response['citations'] ?? [],
+        'error' => null
+    ];
+    
 } catch (\Exception $e) {
     Log::error('Error en la llamada a PerplexityService::ChatCompletions', [
         'exception' => $e->getMessage(),
-        'prompt' => $prompt
+        'prompt' => substr($prompt, 0, 200) // Solo los primeros 200 chars
     ]);
-    return response()->json(['error' => 'Error al procesar la solicitud de IA.'], 500);
+    // DEVOLVER ARRAY, NO JsonResponse
+    return [
+        'error' => 'Error al procesar la solicitud: ' . $e->getMessage(),
+        'data' => null,
+        'fuentes' => []
+    ];
 }
 
 }

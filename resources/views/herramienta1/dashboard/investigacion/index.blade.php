@@ -359,10 +359,15 @@
                                 }
                             });
 
+                            // VALIDAR SI LA RESPUESTA ES OK
+                            if (!response.ok) {
+                                throw new Error(`Error del servidor: ${response.status} - ${response.statusText}`);
+                            }
+
                             const data = await response.json();
                             console.log('Respuesta del servidor investigación:', data);
 
-                            if (data.success) {
+                            if (data.success && data.details) {
                                 // El formato ha cambiado, ahora details es directamente el HTML
                                 // if (data.details) {
                                 //     // Guardamos el HTML para poder referenciarlo después
@@ -440,13 +445,28 @@ if (data.details) {
                                     goToStep(data.goto);
                                 }
                             } else {
-                                throw new Error(data.error || 'Error al generar la investigación');
+                                // MANEJAR ERROR DESDE EL SERVIDOR
+                                const errorMsg = data.error || 'Error desconocido al generar la investigación';
+                                throw new Error(errorMsg);
                             }
                         } catch (error) {
+                            console.error('Error en investigación:', error);
+                            
+                            // MOSTRAR ERROR AL USUARIO
                             const mensaje = contenedor.querySelector('.message');
                             if (mensaje) {
-                                mensaje.innerHTML = `<div class="alert alert-danger">${error.message}</div>`;
+                                mensaje.innerHTML = `
+                                    <div class="bg-red-100 border border-red-400 text-red-700 px-4 py-3 rounded relative mb-4" role="alert">
+                                        <strong class="font-bold">¡Error! </strong>
+                                        <span class="block sm:inline">${error.message}</span>
+                                        <p class="mt-2 text-sm">Por favor, intenta nuevamente. Si el problema persiste, contacta con soporte.</p>
+                                    </div>
+                                `;
+                            } else {
+                                // Si no hay contenedor de mensaje, usar alert
+                                alert('Error: ' + error.message + '\n\nPor favor, intenta nuevamente.');
                             }
+                            
                             contenedor.style.display = 'block';
                         } finally {
                             ocultarLoader();

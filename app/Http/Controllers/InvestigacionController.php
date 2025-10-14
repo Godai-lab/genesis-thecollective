@@ -113,8 +113,9 @@ class InvestigacionController extends Controller
     $brand = $request->input('brand');
     $instruccion = $request->input('instruccion');
 
-    set_time_limit(600);
-    ini_set('max_execution_time', 600);
+    // Aumentar límite de tiempo para investigaciones profundas (sonar-deep-research puede tardar hasta 15 min)
+    set_time_limit(1200); // 20 minutos
+    ini_set('max_execution_time', 1200);
 
     try {
         $respuestaper = $this->callPerplexity($country, $brand, $instruccion);

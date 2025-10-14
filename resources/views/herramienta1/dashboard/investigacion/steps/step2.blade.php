@@ -42,7 +42,7 @@ $paises = [
             </x-dynamic-form>
             
             <div class="bg-blue-50 p-3 mb-4 rounded text-sm">
-                <strong>Nota:</strong> Este proceso puede tardar entre 2 y 4 minutos. Por favor, espera mientras completamos la operación.
+                <strong>Nota:</strong> Este proceso puede tardar entre 5 y 15 minutos dependiendo de la complejidad de la investigación. Por favor, espera mientras completamos la operación.
             </div>
           
             <div class="message text-sm text-red-600 dark:text-red-400 space-y-1"></div>

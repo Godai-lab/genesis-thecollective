@@ -3,16 +3,17 @@
     <div id="step-3-form-content">
         <form id="step-3-form" method="POST" action="{{route('investigacion.store')}}" data-validate="true">
             @csrf
-            <input type="hidden" name="account" id="account_id_step3" value="">
+            {{-- <input type="hidden" name="account" id="account_id_step3" value="" required> --}}
             <input type="hidden" name="investigaciongenerada" id="investigaciongenerada">
+            {{-- <input type="hidden" name="generacion_id" id="generacion_id"> --}}
             <div id="ResultadoInvestigacion" class="mb-4">
                 <h2 class="text-lg font-bold mb-4">Resultado de Investigación:</h2>
                 
                 <div class="container-edit" id="editorinvestigacion"></div>
                 
-                {{-- <p style="font-size: 12px; font-weight: bold;" class="text-blue-600 dark:text-blue-400 cursor-pointer underline mt-2" x-data="" x-on:click="$dispatch('open-modal', 'fuentes-modal')">
+                <p style="font-size: 12px; font-weight: bold;" class="text-blue-600 dark:text-blue-400 cursor-pointer underline mt-2" x-data="" x-on:click="$dispatch('open-modal', 'fuentes-modal')">
                     Ver fuentes
-                </p> --}}
+                </p>
                 
                 <!-- Modal para las fuentes -->
                 <x-modal name="fuentes-modal" :show="false" maxWidth="lg">

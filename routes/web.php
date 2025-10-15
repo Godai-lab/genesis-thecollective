@@ -177,6 +177,8 @@ Route::get('subscribe', [SubscriptionController::class, 'show'])->name('subscrip
 Route::get('/dashboard/herramienta1', [DashboardController::class, 'indexHerramienta1'])->name('dashboard.herramienta1');
 Route::resource('investigacion', InvestigacionController::class);
 Route::post('/investigaciongenerada',[InvestigacionController::class,'generarInvestigacion'])->name('investigacion.generarInvestigacion');
+Route::get('/investigacion/estado/{generationId}', [InvestigacionController::class, 'consultarEstadoGeneracion'])->name('investigacion.estado');
+Route::get('/investigacion/ejecutar/{generationId}', [InvestigacionController::class, 'ejecutarGeneracion'])->name('investigacion.ejecutar');
 Route::get('investigacion/{generated}/download', [InvestigacionController::class, 'download'])->name('investigacion.download');
 
 // Ruta para descargar la última investigación de una cuenta

@@ -15,7 +15,7 @@
     
 </div>
 
-<script>
+{{-- <script>
 // Función para configurar el botón de descarga
 function setupDownloadButton() {
     const btnDescargar = document.getElementById('btnDescargar');
@@ -51,4 +51,4 @@ document.addEventListener('DOMContentLoaded', setupDownloadButton);
 
 // También necesitamos agregar esta función al objeto window para llamarla desde index.blade.php
 window.setupDownloadButton = setupDownloadButton;
-</script>
+</script> --}}

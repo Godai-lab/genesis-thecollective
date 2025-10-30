@@ -4,7 +4,7 @@
 <!-- step3.blade.php -->
 <div id="step-3-form">
     <div id="step-3-form-content">
-        <form id="step-3-form" method="POST" action="{{route('herramienta2.construccionescenario')}}" data-validate="true">
+        <form id="step3Form" method="POST" action="{{route('herramienta2.construccionescenario')}}" data-validate="true">
             @csrf
             <input type="hidden" name="genesisgenerado" id="genesisgenerado"> 
             <div style="display: none;" id="ResultadoAnterior" class="mb-4">
@@ -58,8 +58,8 @@
             
             <div class="mt-6 flex items-center flex-wrap justify-end gap-x-6 gap-y-2">
                 <x-button-genesis type="button" data-step="2" class="step-button">Regresar</x-button-genesis>
-                <x-button-genesis type="button" data-route="{{route('herramienta2.regenerateGenesis')}}" class="form-button-regenerate">Volver a generar</x-button-genesis>
-                <x-button-genesis type="button" id="btnconstruccionescenario" class="form-button">Continuar</x-button-genesis>
+                <x-button-genesis type="button" data-route="{{route('herramienta2.regenerateGenesis')}}" class="" data-btnForm="btnRegenerarEstrategia">Volver a generar</x-button-genesis>
+                <x-button-genesis type="button" id="btnconstruccionescenario" data-btnForm="btnConstruccionEscenario">Continuar</x-button-genesis>
             </div>
         </form>
     </div> 

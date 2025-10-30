@@ -28,10 +28,15 @@
                         <div class="text-base mt-1.5">
                             2.0
                         </div>
-                        <div class="flex flex-col gap-5 items-start justify-between">
+                        <!-- <div class="flex flex-col gap-5 items-start justify-between">
                             <h2 class="sm:text-3xl text-xl flex items-end">Potencia tus habilidades. <a class="inline-block ms-2" href="{{route('herramienta2.index')}}"><img class="w-[30px] h-auto max-w-[30px] block" src="{{ asset('images/god-ai-icon-right.png') }}" alt=""></a></h2>
                             <p class="text-base text-[#737373] h-full">Una vez armado el brief, genera lineamientos estratégicos creativos 360 en pocos minutos. Añade tus conocimientos y deja que nuestra poderosa herramienta con IA lo eleve.</p>
                             <x-button-genesis class="mt-4" href="{{route('herramienta2.index')}}" >Iniciar</x-button-genesis>
+                        </div> -->
+                        <div class="flex flex-col gap-5 items-start justify-between">
+                            <h2 class="sm:text-3xl text-xl flex items-end">Potencia tus habilidades. <a class="inline-block ms-2" href="{{route('creatividad')}}"><img class="w-[30px] h-auto max-w-[30px] block" src="{{ asset('images/god-ai-icon-right.png') }}" alt=""></a></h2>
+                            <p class="text-base text-[#737373] h-full">Una vez armado el brief, genera lineamientos estratégicos creativos 360 en pocos minutos. Añade tus conocimientos y deja que nuestra poderosa herramienta con IA lo eleve.</p>
+                            <x-button-genesis class="mt-4" href="{{route('creatividad')}}" >Iniciar</x-button-genesis>
                         </div>
                     </div>
                     @endcan

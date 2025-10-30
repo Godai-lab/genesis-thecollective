@@ -24,7 +24,24 @@ class Herramienta2Controller extends Controller
     {
         Gate::authorize('haveaccess','genesis.index');
         $accounts = Account::fullaccess()->get();
-        return view('herramienta2.index', compact('accounts'));
+        $data_generated = [];
+        $id_generated = $request->query('generated');
+
+        if ($id_generated) {
+            $generated = Generated::find($id_generated);
+            if ($generated && $generated->key === 'Genesis') {
+                $metadata = $generated->metadata ? json_decode($generated->metadata, true) : [];
+                $step = isset($metadata['step']) ? $metadata['step'] : null;
+                $data_generated = [
+                    'id_generated' => $generated->id,
+                    'account_id' => $generated->account_id,
+                    'step' => $step,
+                    'metadata' => $metadata
+                ];
+            }
+        }
+
+        return view('herramienta2.index', compact('accounts', 'data_generated'));
 
     }
    public function generarGenesis(Request $request){
@@ -37,6 +54,7 @@ class Herramienta2Controller extends Controller
         '360_objective' => 'required|string',
         'account' => 'required|integer',
         'brief' => 'required|integer',
+        'investigation' => 'nullable|integer',
     ]);
 
     if ($validator->fails()) {
@@ -50,11 +68,13 @@ class Herramienta2Controller extends Controller
     $objective = $request->input('360_objective');
     $accountId = $request->input('account');
     $idBrief = $request->input('brief');
-    
+    $idInvestigation = $request->input('investigation');
+
     Log::info('Datos extraídos de la request', [
         'objective' => $objective,
         'accountId' => $accountId,
-        'idBrief' => $idBrief
+        'idBrief' => $idBrief,
+        'idInvestigation' => $idInvestigation
     ]);
     
     try {
@@ -68,35 +88,54 @@ class Herramienta2Controller extends Controller
             'idBrief' => $idBrief,
             'error' => $e->getMessage()
         ]);
-        return response()->json(['error' => 'Error al obtener el brief']);
+        return response()->json(['success' => false, 'error' => 'Error al obtener el brief']);
     }
 
-    $accountData = Field::where('account_id', $accountId)->pluck('value', 'key');
-    Log::info('Account data obtenida', [
-        'account_data_count' => $accountData->count(),
-        'account_data_keys' => $accountData->keys()->toArray()
+    $investigation = '';
+    if ($idInvestigation && $idInvestigation !== null) {
+        try {
+            $investigation = Generated::find($idInvestigation)->value;
+            Log::info('Investigation encontrado', [
+                'investigation_length' => strlen($investigation),
+                'investigation_preview' => substr($investigation, 0, 100) . '...'
+            ]);
+        } catch (\Exception $e) {
+            Log::error('Error al obtener la investigation', [
+                'idInvestigation' => $idInvestigation,
+                'error' => $e->getMessage()
+            ]);
+            return response()->json(['success' => false, 'error' => 'Error al obtener la investigation']);
+        }
+    }
+
+    $metadata = [
+        'objective' => $objective,
+        'id_brief' => $idBrief,
+        'brief' => $brief,
+        'id_investigation' => $idInvestigation,
+        'investigation' => $investigation,
+        'started_at' => now()->toISOString(),
+        'step' => 2,
+    ];
+
+    // Crear un registro temporal con estado "procesando"
+    $generated = Generated::create([
+        'account_id' => $accountId,
+        'key' => 'Genesis',
+        'name' => 'Estrategia en proceso...',
+        'value' => 'Generando estrategia...',
+        'rating' => null,
+        'status' => 'processing', // Nuevo campo para el estado
+        'metadata' => json_encode($metadata)
     ]);
 
-    if ($accountData) {
-        $fields = [
-            'Brief' => $brief,
-            '360_objective' => $objective,
-        ];
-
-        foreach ($fields as $key => $value) {
-            if (!is_null($value)) {
-                Field::updateOrCreate(
-                    ['account_id' => $accountId, 'key' => $key],
-                    ['value' => $value]
-                );
-            }
-        }
+    if ($metadata && $metadata['brief'] && $metadata['objective']) {
         
         Log::info('Campos guardados en la base de datos');
         
         try {
             Log::info('Iniciando generación de insight');
-            $insightgenerado = $this->GenerarInsight($brief,$objective);
+            $insightgenerado = $this->GenerarInsight($brief,$objective); 
             Log::info('Insight generado exitosamente', [
                 'insight_data_length' => strlen($insightgenerado['data']),
                 'insight_fuentes_count' => is_array($insightgenerado['fuentes']) ? count($insightgenerado['fuentes']) : 'no es array',
@@ -124,20 +163,38 @@ class Herramienta2Controller extends Controller
                 'fuentes_html_length' => strlen($fuentesHTML)
             ]);
 
-            Field::updateOrCreate(
-                [
-                    'account_id' => $accountId,
-                    'key' => 'fuentesGenesis'
-                ],
-                [
-                    'value' => $fuentesHTML
-                ]
-            );
-
             // Preparar las fuentes para la respuesta
             $fuentesResponse = is_string($insightfuentes) ? explode("\n", trim($insightfuentes)) : $insightfuentes;
 
-            $prompt = <<<EOT
+            $metadata['genesis_insight_data'] = $insightdata;
+            $metadata['genesis_insight_fuentes'] = $fuentesResponse;
+            $metadata['genesis_insight_fuentes_html'] = $fuentesHTML;
+
+            $generated->update([
+                'metadata' => json_encode($metadata)
+            ]);
+
+            if ($investigation) {
+                $prompt = <<<EOT
+En base a la información proporcionada en el brief y el objetivo dado, crea un GÉNESIS completo. 
+
+BRIEF: 
+$brief
+
+OBJETIVO: 
+$objective
+
+INSIGHTS:
+$insightdata
+
+INVESTIGACIÓN:
+$investigation
+
+Analiza cuidadosamente la información disponible, además de los Insights poderosos y la investigación que te servirán para nutrir el resultado, identifica los puntos clave relevantes para cada componente del GÉNESIS, y desarrolla una estrategia coherente y efectiva. Responde en español y presenta solo el resultado final del GÉNESIS sin notas o textos adicionales. Aquí tienes la información para lograrlo:
+
+EOT;
+            } else {
+                $prompt = <<<EOT
 En base a la información proporcionada en el brief y el objetivo dado, crea un GÉNESIS completo. 
 
 BRIEF: 
@@ -152,11 +209,7 @@ $insightdata
 Analiza cuidadosamente la información disponible, además de los Insights poderosos que te servirán para nutrir el resultado, identifica los puntos clave relevantes para cada componente del GÉNESIS, y desarrolla una estrategia coherente y efectiva. Responde en español y presenta solo el resultado final del GÉNESIS sin notas o textos adicionales. Aquí tienes la información para lograrlo:
 
 EOT;
-
-            Log::info('Prompt preparado', [
-                'prompt_length' => strlen($prompt),
-                'prompt_preview' => substr($prompt, 0, 200) . '...'
-            ]);
+            }
 
             $system_prompt = <<<EOT
 Eres un experto en planificación estratégica publicitaria especializado en la metodología GÉNESIS (Generación Estratégica Neuroinspirada de Efectividad Sincronizada con Inteligencia Sintética) de god-ai (Objetivo cuantificado, Obstáculo identificado, Insight Aumentado, Desafío creativo). Esta metodología se utiliza para crear estrategias creativas publicitarios efectivas y consiste en los siguientes componentes:
@@ -219,8 +272,6 @@ Limpiar incluso lo que no se ve.
 </example>
 </examples>
 
-
-
 EOT;
 
             // $model = "claude-3-7-sonnet-20250219";
@@ -236,31 +287,38 @@ EOT;
             
             Log::info('Iniciando llamada a AnthropicService::TextGeneration');
             $response = AnthropicService::TextGeneration($prompt, $model, $temperature, $system_prompt);
-           Log::info('Respuesta de AnthropicService recibida', [
-    'response_type' => gettype($response),
-    'response_keys' => is_array($response) ? array_keys($response) : 'no es array',
-    'response_data_length' => is_array($response) && isset($response['data']) ? strlen($response['data']) : 'no disponible',
-    'response_full' => $response // Agregar la respuesta completa para debugging
-]);
-// Verificar que la respuesta tenga los datos esperados
-if (!is_array($response) || !isset($response['data'])) {
-    Log::error('Respuesta inesperada de AnthropicService', [
-        'response' => $response,
-        'response_type' => gettype($response)
-    ]);
-    
-    return response()->json([
-        'error' => 'Respuesta inesperada del servicio de IA',
-        'details' => 'La respuesta no contiene los datos esperados',
-        'goto' => 2
-    ]);
-}
+            Log::info('Respuesta de AnthropicService recibida', [
+                'response_type' => gettype($response),
+                'response_keys' => is_array($response) ? array_keys($response) : 'no es array',
+                'response_data_length' => is_array($response) && isset($response['data']) ? strlen($response['data']) : 'no disponible',
+                'response_full' => $response // Agregar la respuesta completa para debugging
+            ]);
+            // Verificar que la respuesta tenga los datos esperados
+            if (!is_array($response) || !isset($response['data'])) {
+                Log::error('Respuesta inesperada de AnthropicService', [
+                    'response' => $response,
+                    'response_type' => gettype($response)
+                ]);
+                
+                return response()->json([
+                    'success' => false,
+                    'error' => 'Respuesta inesperada del servicio de IA, La respuesta no contiene los datos esperados',
+                ]);
+            }
             Log::info('Preparando respuesta final');
+
+            $metadata['genesis'] = $response['data'];
+            $metadata['step'] = 3;
+
+            $generated->update([
+                'metadata' => json_encode($metadata)
+            ]);
+
             $finalResponse = [
-                'success' => 'Datos procesados correctamente.', 
-                'details' => array_merge($response, ['fuentes' => $fuentesResponse]),
-                'goto' => 3, 
-                'function' => 'generarGenesis'
+                'success' => true, 
+                'data' => array_merge($response, ['fuentes' => $fuentesResponse]),
+                'function' => 'generarGenesis',
+                'id_generated' => $generated->id
             ];
             
             Log::info('Respuesta final preparada', [
@@ -277,11 +335,10 @@ if (!is_array($response) || !isset($response['data'])) {
                 'file' => $e->getFile(),
                 'trace' => $e->getTraceAsString()
             ]);
-            
+
             return response()->json([
+                'success' => false,
                 'error' => 'Ha ocurrido un error al generar el Genesis. Por favor, intenta nuevamente.',
-                'details' => env('APP_DEBUG') ? $e->getMessage() : 'Error de conexión con el servicio AI',
-                'goto' => 2
             ]);
         }
 
@@ -289,7 +346,8 @@ if (!is_array($response) || !isset($response['data'])) {
         Log::error('No se encontraron datos de cuenta', [
             'accountId' => $accountId
         ]);
-        return response()->json(['error' => 'faltan datos']);
+        return response()->json(['success' => false, 'error' => 'faltan datos']);
+        // return response()->json(['error' => 'faltan datos']);
     }
 }
 
@@ -299,6 +357,7 @@ public function regenerateGenesis(Request $request){
     $validator = Validator::make($request->all(), [
         'genesisgenerado' => 'required|string',
         'account' => 'required|integer',
+        'id_generated' => 'required|integer',
     ]);
 
     if ($validator->fails()) {
@@ -308,12 +367,28 @@ public function regenerateGenesis(Request $request){
 
     $genesisgenerado = $request->input('genesisgenerado');
     $accountId = $request->input('account');
+    $id_generated = $request->input('id_generated');
 
-    $accountData = Field::where('account_id', $accountId)->pluck('value', 'key');
+    $generated = Generated::find($id_generated);
+            
+    if (!$generated) {
+        return response()->json([
+            'success' => false,
+            'error' => 'Generación no encontrada'
+        ]);
+    }
 
-    if ($accountData) {
-        $brief = $accountData->get('Brief');
-        $objective = $accountData->get('360_objective');
+    $metadata = $generated->metadata ? json_decode($generated->metadata, true) : [];
+
+
+    // $accountData = Field::where('account_id', $accountId)->pluck('value', 'key');
+
+    // Aquí ya no obtendré los datos desde field sino desde el generated
+    // Verifico si en generated tengo el brief y el objetivo
+
+    if ($metadata && $metadata['brief'] && $metadata['objective']) {
+        $brief = $metadata['brief'];
+        $objective = $metadata['objective'];
 
         $prompt = <<<EOT
 
@@ -398,23 +473,29 @@ EOT;
             $temperature = 0.8;
             $response = AnthropicService::TextGeneration($prompt, $model, $temperature, $system_prompt);
 
-            return response()->json(['success' => 'Datos procesados correctamente.', 'details' => ['newgenesis' => $response['data'], 'oldgenesis' => $genesisgenerado], 'goto' => 3, 'function' => 'regenerateGenesis']);
+            $metadata['newgenesis'] = $response['data'];
+            $metadata['oldgenesis'] = $genesisgenerado;
+
+            $generated->update([
+                'metadata' => json_encode($metadata)
+            ]);
+
+            return response()->json(['success' => true, 'data' => ['newgenesis' => $response['data'], 'oldgenesis' => $genesisgenerado], 'function' => 'regenerateGenesis', 'id_generated' => $generated->id]);
         } catch (\Exception $e) {
             Log::error('Error al regenerar Genesis', [
                 'message' => $e->getMessage(),
                 'accountId' => $accountId,
                 'trace' => $e->getTraceAsString()
             ]);
-            
             return response()->json([
+                'success' => false,
                 'error' => 'Ha ocurrido un error al regenerar el Genesis. Por favor, intenta nuevamente.',
-                'details' => env('APP_DEBUG') ? $e->getMessage() : 'Error de conexión con el servicio AI',
-                'goto' => 3
             ]);
         }
 
     }else{
-        return response()->json(['error' => 'faltan datos']);
+        return response()->json(['success' => false, 'error' => 'faltan datos']);
+        // return response()->json(['error' => 'faltan datos']);
     }
 }
 
@@ -423,6 +504,7 @@ public function construccionescenario(Request $request){
     $validator = Validator::make($request->all(), [
         'genesisgenerado' => 'required|string',
         'account' => 'required|integer',
+        'id_generated' => 'required|integer',
     ]);
 
     if ($validator->fails()) {
@@ -432,20 +514,37 @@ public function construccionescenario(Request $request){
 
     $genesisgenerado = $request->input('genesisgenerado');
     $accountId = $request->input('account');
-    $accountData = Field::where('account_id', $accountId)->pluck('value', 'key');
+    // $accountData = Field::where('account_id', $accountId)->pluck('value', 'key');
+    $id_generated = $request->input('id_generated');
 
-    if ($accountData) {
+    $generated = Generated::find($id_generated);
+            
+    if (!$generated) {
+        return response()->json([
+            'success' => false,
+            'error' => 'Generación no encontrada'
+        ]);
+    }
+
+    $metadata = $generated->metadata ? json_decode($generated->metadata, true) : [];
+
+    if ($metadata && $metadata['brief'] && $metadata['objective']) {
         // Buscar el registro existente
-        $brief = $accountData->get('Brief');
-        $objective = $accountData->get('360_objective');
+        $brief = $metadata['brief'];
+        $objective = $metadata['objective'];
 
         try {
             // Guarda los datos del génesis
-            Field::updateOrCreate(
-                ['account_id' => $accountId, 'key' => '360_genesis'],
-                ['value' => $genesisgenerado]
-            );
-            
+            // Field::updateOrCreate(
+            //     ['account_id' => $accountId, 'key' => '360_genesis'],
+            //     ['value' => $genesisgenerado]
+            // );
+
+            $metadata['genesis'] = $genesisgenerado;
+
+            $generated->update([
+                'metadata' => json_encode($metadata)
+            ]);
             // Genera insight usando el génesis
             $insightgenerado = $this->GenerarInsight2($brief,$objective,$genesisgenerado);
             $insightdata = $insightgenerado['data'];
@@ -465,18 +564,26 @@ public function construccionescenario(Request $request){
                 $fuentesHTML = '<p><strong>Fuentes:</strong> No se encontraron fuentes.</p>';
             }
 
-            Field::updateOrCreate(
-                [
-                    'account_id' => $accountId,
-                    'key' => 'fuentesEscenario'
-                ],
-                [
-                    'value' => $fuentesHTML
-                ]
-            );
+            // Field::updateOrCreate(
+            //     [
+            //         'account_id' => $accountId,
+            //         'key' => 'fuentesEscenario'
+            //     ],
+            //     [
+            //         'value' => $fuentesHTML
+            //     ]
+            // );
             
             // Preparar las fuentes para la respuesta
             $fuentesResponse = is_string($insightfuentes) ? explode("\n", trim($insightfuentes)) : $insightfuentes;
+
+            $metadata['escenario_insight_data'] = $insightdata;
+            $metadata['escenario_insight_fuentes'] = $fuentesResponse;
+            $metadata['escenario_insight_fuentes_html'] = $fuentesHTML;
+
+            $generated->update([
+                'metadata' => json_encode($metadata)
+            ]);
 
             // Genera el escenario
             $prompt = <<<EOT
@@ -533,11 +640,19 @@ public function construccionescenario(Request $request){
             //     ['value' => $response['data']]
             // );
 
+            $metadata['construccionescenario'] = $response['data'];
+            $metadata['step'] = 4;
+
+            $generated->update([
+                'name' => 'Creatividad en proceso...',
+                'metadata' => json_encode($metadata)
+            ]);
+
             return response()->json(
-            ['success' => 'Datos procesados correctamente.', 
-            'details' =>   array_merge($response, ['fuentes' => $fuentesResponse]), 
-            'goto' => 4, 
-            'function' => 'construccionescenario'
+            ['success' => true, 
+            'data' =>   array_merge($response, ['fuentes' => $fuentesResponse]), 
+            'function' => 'construccionescenario',
+            'id_generated' => $generated->id
                 ]);
 
         } catch (\Exception $e) {
@@ -546,15 +661,14 @@ public function construccionescenario(Request $request){
                 'accountId' => $accountId,
                 'trace' => $e->getTraceAsString()
             ]);
-            
             return response()->json([
-                'error' => 'Ha ocurrido un error al generar el escenario. Por favor, intenta nuevamente.',
-                'details' => env('APP_DEBUG') ? $e->getMessage() : 'Error de conexión con el servicio AI',
-                'goto' => 3
+                'success' => false,
+                'error' => 'Ha ocurrido un error al generar el escenario. Por favor, intenta nuevamente.'
             ]);
         }
     } else {
-        return response()->json(['error' => 'faltan datos']);
+        return response()->json(['success' => false, 'error' => 'faltan datos']);
+        // return response()->json(['error' => 'faltan datos']);
     }
 }
 
@@ -562,8 +676,9 @@ public function regenerarConstruccionEscenario(Request $request){
     // Validar las URLs y archivos
     $validator = Validator::make($request->all(), [
         'construccionescenario' => 'required|string',
-        'genesisgenerado' => 'required|string',
+        // 'genesisgenerado' => 'required|string',
         'account' => 'required|integer',
+        'id_generated' => 'required|integer',
     ]);
 
     if ($validator->fails()) {
@@ -572,14 +687,27 @@ public function regenerarConstruccionEscenario(Request $request){
     ini_set('max_execution_time', 300);
 
     $construccionescenario = $request->input('construccionescenario');
-    $genesisgenerado = $request->input('genesisgenerado');
+    // $genesisgenerado = $request->input('genesisgenerado');
     $accountId = $request->input('account');
+    $id_generated = $request->input('id_generated');
 
-    $accountData = Field::where('account_id', $accountId)->pluck('value', 'key');
+    // $accountData = Field::where('account_id', $accountId)->pluck('value', 'key');
 
-    if ($accountData) {
-        $brief = $accountData->get('Brief');
-        $objective = $accountData->get('360_objective');
+    $generated = Generated::find($id_generated);
+
+    if (!$generated) {
+        return response()->json([
+            'success' => false,
+            'error' => 'Generación no encontrada'
+        ]);
+    }   
+
+    $metadata = $generated->metadata ? json_decode($generated->metadata, true) : [];
+
+    if ($metadata && $metadata['brief'] && $metadata['objective'] && $metadata['genesis']) {
+        $brief = $metadata['brief'];
+        $objective = $metadata['objective'];
+        $genesisgenerado = $metadata['genesis'];
 
         try {
             $prompt = <<<EOT
@@ -633,29 +761,36 @@ public function regenerarConstruccionEscenario(Request $request){
             $temperature = 0.8;
             $response = AnthropicService::TextGeneration($prompt, $model, $temperature, $system_prompt);
 
-            return response()->json(['success' => 'Datos procesados correctamente.', 'details' => ['newescenario' => $response['data'], 'oldescenario' => $construccionescenario], 'goto' => 4, 'function' => 'regenerarConstruccionEscenario']);
+            $metadata['newescenario'] = $response['data'];
+            $metadata['oldescenario'] = $construccionescenario;
+
+            $generated->update([
+                'metadata' => json_encode($metadata)
+            ]);
+
+            return response()->json(['success' => true, 'data' => ['newescenario' => $response['data'], 'oldescenario' => $construccionescenario], 'function' => 'regenerarConstruccionEscenario', 'id_generated' => $generated->id]);
         } catch (\Exception $e) {
             Log::error('Error al regenerar construcción de escenario', [
                 'message' => $e->getMessage(),
                 'accountId' => $accountId,
                 'trace' => $e->getTraceAsString()
             ]);
-            
             return response()->json([
+                'success' => false,
                 'error' => 'Ha ocurrido un error al regenerar el escenario. Por favor, intenta nuevamente.',
-                'details' => env('APP_DEBUG') ? $e->getMessage() : 'Error de conexión con el servicio AI',
-                'goto' => 3
             ]);
         }
     } else {
-        return response()->json(['error' => 'faltan datos']);
+        return response()->json(['success' => false, 'error' => 'faltan datos']);
+        // return response()->json(['error' => 'faltan datos']);
     }
 }
-public function eleccioncampania(Request $request){
+public function saveconstruccionescenario(Request $request){
     // Validar las URLs y archivos
     $validator = Validator::make($request->all(), [
         'construccionescenario' => 'required|string',
         'account' => 'required|integer',
+        'id_generated' => 'required|integer',
     ]);
 
     if ($validator->fails()) {
@@ -664,103 +799,1169 @@ public function eleccioncampania(Request $request){
     $construccionescenario = $request->input('construccionescenario');
    
     $accountId = $request->input('account');
-    $accountData = Field::where('account_id', $accountId)->pluck('value', 'key');
+    // $accountData = Field::where('account_id', $accountId)->pluck('value', 'key');
     // $objective = Field::where('key', '360_objective')->where('account_id', $accountId)->first();
     // $problema = Field::where('key', '360_problema')->where('account_id', $accountId)->first();
     // $insight = Field::where('key', '360_insight')->where('account_id', $accountId)->first();
-    if ($accountData) {
-        // Buscar el registro existente
-        $brief = $accountData->get('Brief');
-        $objective = $accountData->get('360_objective');
-        $genesis = $accountData->get('360_genesis');
 
-       
+    $id_generated = $request->input('id_generated');
+
+    $generated = Generated::find($id_generated);
+
+    if (!$generated) {
+        return response()->json([
+            'success' => false,
+            'error' => 'Generación no encontrada'
+        ]);
+    }
+
+    $metadata = $generated->metadata ? json_decode($generated->metadata, true) : [];
+    if ($metadata && $metadata['brief'] && $metadata['objective'] && $metadata['genesis']) {
+        // Buscar el registro existente
+        $brief = $metadata['brief'];
+        $objective = $metadata['objective'];
+        $genesis = $metadata['genesis'];    
 
         // $prompt = "Tu función es generar un CONTEXTO, PROBLEMA, SOLUCIÓN y CONCEPTO usando estos datos. \nObjetivo: $objective\nProblema: $problema\nInsight: $insight\nReto: $reto\nConstrucción de escenario:";
         // $prompt .= "El formato que debes enviar la información es HTML";
 
         // $response = AnthropicService::TextGeneration($prompt);
-        return response()->json(['success' => 'Datos procesados correctamente eleccioncampania.', 'details' => $genesis, 'goto' => 5]);
+
+        $metadata['construccionescenario'] = $construccionescenario;
+        $metadata['step'] = 5;
+
+        $generated->update([
+            'name' => 'Elige campaña en proceso...',
+            'metadata' => json_encode($metadata)
+        ]);
+
+        return response()->json(['success' => true, 'data' => $genesis, 'function' => 'saveconstruccionescenario', 'id_generated' => $generated->id]);
     }else{
-        return response()->json(['error' => 'faltan datos']);
+        return response()->json(['success' => false, 'error' => 'faltan datos']);
     }
 }
 
-public function saveeleccioncampania(Request $request){
-    // Validar las URLs y archivos
-    
-    $validator = Validator::make($request->all(), [
-        '360_Tipo_de_campaña' => 'required|string',
-        'account' => 'required|integer',
-    ]);
+public function validarconcepto(Request $request){
+    try {
+        // Validar las URLs y archivos
+        $validator = Validator::make($request->all(), [
+            // 'concepto_pais' => 'required|string',
+            // 'concepto_nombre_marca' => 'required|string',
+            'concepto_categoria' => 'required|string',
+            'concepto_periodo_campania' => 'required|string',
+            'account' => 'required|integer',
+            'id_generated' => 'required|integer',
+        ]);
 
-    if ($validator->fails()) {
-        return response()->json(['error' => $validator->errors()]);
+        if ($validator->fails()) {
+            return response()->json(['error' => $validator->errors()]);
+        }
+
+        Log::info("Iniciando Validar Concepto", $request->all());
+
+        // $concepto_pais = $request->input('concepto_pais');
+        // $concepto_nombre_marca = $request->input('concepto_nombre_marca');
+        $concepto_categoria = $request->input('concepto_categoria');
+        $concepto_periodo_campania = $request->input('concepto_periodo_campania');
+        $accountId = $request->input('account');
+        $id_generated = $request->input('id_generated');
+
+        $generated = Generated::find($id_generated);
+
+        if (!$generated) {
+            return response()->json([
+                'success' => false,
+                'error' => 'Generación no encontrada'
+            ]);
+        }
+
+        $metadata = $generated->metadata ? json_decode($generated->metadata, true) : [];
+
+        $generatedBrief = Generated::find($metadata['id_brief']);
+        if (!$generatedBrief) {
+            return response()->json([
+                'success' => false,
+                'error' => 'Generación no encontrada'
+            ]);
+        }
+        $metadataBrief = $generatedBrief->metadata ? json_decode($generatedBrief->metadata, true) : [];
+
+        if ($metadata && $metadata['construccionescenario'] && $metadataBrief) {
+            $construccionescenario = $metadata['construccionescenario'];
+            $metadata['concepto_pais'] = $metadataBrief['country'];
+            $metadata['concepto_nombre_marca'] = $metadataBrief['name'];
+            $metadata['concepto_categoria'] = $concepto_categoria;
+            $metadata['concepto_periodo_campania'] = $concepto_periodo_campania;
+
+            $concepto = $construccionescenario;
+
+            $generated->update([
+                'metadata' => json_encode($metadata)
+            ]);
+
+            $options = [
+                'prompt' => [
+                    'id' => 'pmpt_68a2319d991c8190a4152ca9c8ae51e705034b13c3fd9d8e',
+                    'variables' => [
+                        "concepto" => $concepto,
+                        "marca" => $metadataBrief['name'],
+                        "categoria" => $concepto_categoria,
+                        "pais" => $metadataBrief['country'],   
+                        "periodo" => $concepto_periodo_campania
+                    ]
+                ],
+                'background' => true
+            ];
+
+            // Llamar al nuevo endpoint de deep research
+            $response = OpenAiService::createModelResponse($options);
+
+            // $response = ['data' => ['id' => 'resp_68b9a8201b3481958d94f473015b20080df8ba61e105eceb']];
+
+            Log::info('Respuesta OpenAiService::createModelResponse (Validar Concepto)', [
+                'response' => $response
+            ]);
+
+            if (isset($response['error'])) {
+                Log::error('Error en la llamada a OpenAiService::createModelResponse (Validar Concepto)', [
+                    'error' => $response['error']
+                ]);
+                return response()->json(['success' => false, 'error' => $response['error']]);
+            }
+
+            $metadata['id_generacion_concepto'] = $response['data']['id'];
+            $metadata['generacion_concepto_data'] = $response['data'];
+            $metadata['generacion_concepto_status'] = 'pending';
+            $metadata['step'] = 10;
+
+            $generated->update([
+                'name' => 'Validando concepto en proceso...',
+                'metadata' => json_encode($metadata)
+            ]);
+
+            return response()->json(['success' => true, 'data' => $response['data'], 'function' => 'validarconcepto', 'id_generated' => $generated->id]);
+            
+        }else{
+            return response()->json(['success' => false, 'error' => 'faltan datos']);
+        }
+    } catch (\Exception $e) {
+        Log::error('Error al validar concepto', [
+            'message' => $e->getMessage(),
+            'trace' => $e->getTraceAsString()
+        ]);
+        return response()->json(['success' => false, 'error' => 'Ha ocurrido un error al validar el concepto. Por favor, intenta nuevamente.']);
     }
+}
 
-    ini_set('max_execution_time', 300);
-
-    $construccionescenario = $request->input('construccionescenario');
-    $construccionescenariofinal = $construccionescenario;
-    $accountId = $request->input('account');
-    $account = Account::find($accountId);
-    // Buscar el registro existente
-    Field::updateOrCreate(
-        ['account_id' => $accountId, 'key' => '360_construccionescenario'],
-        ['value' => $construccionescenariofinal]
-    );
-    $accountData = Field::where('account_id', $accountId)->pluck('value', 'key');
-    
-
-    if ($accountData) {
+public function get_concepto($generationId){
+    try {
+        $generated = Generated::find($generationId);
         
-       
-        $category = $account->category;
-    Log::info("Categoria encontrada", [
-        'Categoría' => $category,
-      
-    ]);
-        $brief = $accountData->get('Brief');
-        $objective = $accountData->get('360_objective');
-        $genesis = $accountData->get('360_genesis');
-        $fuentesGenesis= $accountData->get('fuentesGenesis');
-        $fuentesEscenario= $accountData->get('fuentesEscenario');
-        $construccionescenario = $accountData->get('360_construccionescenario');
-        $genesiscompleto = $genesis . $construccionescenario;
+        if (!$generated) {
+            return response()->json([
+                'success' => false,
+                'error' => 'Generación no encontrada'
+            ], 404);
+        }
 
-        $fields = [
-            '360_Tipo_de_campaña' => $request->input('360_Tipo_de_campaña'),
-        ];
+        $metadata = $generated->metadata ? json_decode($generated->metadata, true) : [];
 
-        foreach ($fields as $key => $value) {
-            if (!is_null($value)) {
-                Field::updateOrCreate(
-                    ['account_id' => $accountId, 'key' => $key],
-                    ['value' => $value]
-                );
+        $content = '';
+        $sources = [];
+        $statusgenerated = 'processing';
+
+        $response = OpenAiService::getModelResponse($metadata['id_generacion_concepto']);
+
+        if(isset($response['success']) && !$response['success']){
+            return response()->json([
+                'success' => false,
+                'error' => $response['error']
+            ], 500);
+        }
+
+        if($response['data']['status'] === 'completed'){
+            $statusgenerated = 'completed';
+            if (isset($response['data']['output'])) {
+                foreach ($response['data']['output'] as $output_item) {
+                    if ($output_item['type'] === 'message') {
+                        if (isset($output_item['content'][0]['text'])) {
+                            $content = $output_item['content'][0]['text'];
+                        }
+                        if (isset($output_item['content'][0]['annotations'])) {
+                            foreach($output_item['content'][0]['annotations'] as $annotation){
+                                if($annotation['type'] === 'url_citation'){
+                                    $sources[] = $annotation['url'];
+                                }
+                            }
+                        }
+                    }
+                }
             }
         }
-        $Tipodecampaña = $request->input('360_Tipo_de_campaña');
-        $country = $accountData->get('country');
-
-        $creatividad = $this->generarCreatividad($Tipodecampaña, $objective, $genesiscompleto, $brief, $category);
-        $estrategia = $this->generarEstrategia($Tipodecampaña, $objective, $genesiscompleto, $country, $brief);
-        $ideasContenido = $this->generarIdeasContenido($Tipodecampaña, $objective, $genesiscompleto, $brief, $creatividad['data'], $estrategia['data'] );
-
-    
-
-        //$innovacion = $this->generarInnovacion($Tipodecampaña, $objective, $construccionescenario, $brief);
-        // $estrategia= "estrategia";
-        // $creatividad="creatividad";
-        // $ideasContenido="ideasContenido";
 
 
-        $response = ['genesis' =>  $genesis,'fuentesGenesis'=>$fuentesGenesis,'escenario'=>$construccionescenario ,'fuentesEscenario'=>$fuentesEscenario, 'estrategia' => $estrategia, 'creatividad' => $creatividad, 'contenido' => $ideasContenido];
+        if($statusgenerated === 'completed'){
 
-        return response()->json(['success' => 'Datos procesados correctamente.', 'details' => $response, 'goto' => 6, 'function' => 'construccionEstrategiaCreatividadInnovacion']);
-        // return response()->json(['success' => 'Datos procesados correctamente.', 'details' => true, 'goto' => 6]);
-    }else{
-        return response()->json(['error' => 'faltan datos']);
+            $metadata['generacion_concepto_content'] = $content;
+            $metadata['generacion_concepto_sources'] = $sources;
+            $metadata['generacion_concepto_status'] = 'completed';
+
+            $generated->update([
+                'metadata' => json_encode($metadata)
+            ]);
+
+            return response()->json([
+                'success' => true,
+                'status' => 'completed',
+                'generation_id' => $generated->id,
+                'data' => $content,
+                'sources' => $sources
+            ]);
+        }else{
+            return response()->json([
+                'success' => true,
+                'status' => $generated->status,
+                'generation_id' => $generated->id
+            ]);
+        }
+
+    } catch (\Exception $e) {
+        return response()->json([
+            'success' => false,
+            'error' => 'Error al consultar estado: ' . $e->getMessage()
+        ], 500);
+    }
+}
+
+public function saveValidarConcepto(Request $request){
+    try{
+        // Validar las URLs y archivos
+        $validator = Validator::make($request->all(), [
+            'validarConcepto' => 'required|string',
+            'id_account' => 'required|integer',
+            'rating' => 'required|integer',
+            'file_name' => 'required|string',
+            'id_generated' => 'required|integer',
+        ]);
+
+        if ($validator->fails()) {
+            return response()->json(['error' => $validator->errors()]);
+        }
+
+        $validarConcepto = $request->input('validarConcepto');
+        $accountId = $request->input('id_account');
+        $id_generated = $request->input('id_generated');
+        $rating = $request->input('rating');
+        $file_name = $request->input('file_name');
+
+        $generated = Generated::find($id_generated);
+
+        if (!$generated) {
+            return response()->json([
+                'success' => false,
+                'error' => 'Generación no encontrada'
+            ]);
+        }
+
+        $metadata = $generated->metadata ? json_decode($generated->metadata, true) : [];
+
+        $metadata['validar_concepto'] = $validarConcepto;
+        $metadata['step'] = 6;
+
+        $generated->update([
+            'name' => 'eleccion de campaña en proceso...',
+            'metadata' => json_encode($metadata)
+        ]);
+
+        $generatedValidarConcepto = Generated::create([
+            'account_id' => $accountId,
+            'key' => 'Concepto',
+            'name' => $file_name,
+            'value' => $validarConcepto,
+            'rating' => $rating,
+            'status' => 'completed',
+            'metadata' => null
+        ]);
+
+        return response()->json(['success' => true, 'data' => $validarConcepto, 'function' => 'saveValidarConcepto', 'id_generated' => $generated->id]);
+    }catch(\Exception $e){
+        return response()->json(['success' => false, 'error' => $e->getMessage()]);
+    }
+}
+
+public function mejorarConcepto(Request $request){
+    try{
+        $validator = Validator::make($request->all(), [
+            'validarConcepto' => 'required|string',
+            'id_account' => 'required|integer',
+            'id_generated' => 'required|integer',
+        ]);
+
+        if ($validator->fails()) {
+            return response()->json(['error' => $validator->errors()]);
+        }
+
+        $accountId = $request->input('id_account');
+        $id_generated = $request->input('id_generated');
+        $validarConcepto = $request->input('validarConcepto');
+
+        $generated = Generated::find($id_generated);
+        if (!$generated) {
+            return response()->json([
+                'success' => false,
+                'error' => 'Generación no encontrada'
+            ]);
+        }
+
+        $metadata = $generated->metadata ? json_decode($generated->metadata, true) : [];
+
+        $creatividad = $metadata['construccionescenario'];
+
+        $options = [
+            'prompt' => [
+                'id' => 'pmpt_68cc1dd185588193a98bf0d237f72c0206d213a923b14fc6',
+                'variables' => [
+                    "creatividad" => $creatividad,
+                    "concepto_validado" => $validarConcepto,
+                ]
+            ],
+            'background' => true
+        ];
+
+        // Llamar al nuevo endpoint de deep research
+        $response = OpenAiService::createModelResponse($options);
+
+        if (isset($response['error'])) {
+            Log::error('Error en la llamada a OpenAiService::createModelResponse (Mejorar Concepto)', [
+                'error' => $response['error']
+            ]);
+            return response()->json(['success' => false, 'error' => $response['error']]);
+        }
+
+        $metadata['id_generacion_mejorar_concepto'] = $response['data']['id'];
+        $metadata['generacion_mejorar_concepto_data'] = $response['data'];
+        $metadata['generacion_mejorar_concepto_status'] = 'pending';
+
+        $metadata['step'] = 9;
+
+        $generated->update([
+            'name' => 'Mejorando concepto en proceso...',
+            'metadata' => json_encode($metadata)
+        ]);
+
+        return response()->json(['success' => true, 'data' => $response['data'], 'function' => 'mejorarConcepto', 'id_generated' => $generated->id]);
+    }catch(\Exception $e){
+        return response()->json(['success' => false, 'error' => $e->getMessage()]);
+    }
+}
+
+public function get_concepto_mejorado($generationId){
+    try {
+        $generated = Generated::find($generationId);
+        
+        if (!$generated) {
+            return response()->json([
+                'success' => false,
+                'error' => 'Generación no encontrada'
+            ], 404);
+        }
+
+        $metadata = $generated->metadata ? json_decode($generated->metadata, true) : [];
+
+        $content = '';
+        $sources = [];
+        $statusgenerated = 'processing';
+
+        $response = \App\Services\OpenAiService::getModelResponse($metadata['id_generacion_mejorar_concepto']);
+
+        if(isset($response['success']) && !$response['success']){
+            return response()->json([
+                'success' => false,
+                'error' => $response['error']
+            ], 500);
+        }
+
+        if($response['data']['status'] === 'completed'){
+            $statusgenerated = 'completed';
+            if (isset($response['data']['output'])) {
+                foreach ($response['data']['output'] as $output_item) {
+                    if ($output_item['type'] === 'message') {
+                        if (isset($output_item['content'][0]['text'])) {
+                            $content = $output_item['content'][0]['text'];
+                        }
+                        if (isset($output_item['content'][0]['annotations'])) {
+                            foreach($output_item['content'][0]['annotations'] as $annotation){
+                                if($annotation['type'] === 'url_citation'){
+                                    $sources[] = $annotation['url'];
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+        }
+
+        if($statusgenerated === 'completed'){
+
+            $metadata['generacion_mejorar_concepto_content'] = $content;
+            $metadata['generacion_mejorar_concepto_sources'] = $sources;
+            $metadata['generacion_mejorar_concepto_status'] = 'completed';
+
+            $generated->update([
+                'metadata' => json_encode($metadata)
+            ]);
+
+            return response()->json([
+                'success' => true,
+                'status' => 'completed',
+                'generation_id' => $generated->id,
+                'data' => $content,
+                'sources' => $sources
+            ]);
+        }else{
+            return response()->json([
+                'success' => true,
+                'status' => $generated->status,
+                'generation_id' => $generated->id
+            ]);
+        }
+
+    } catch (\Exception $e) {
+        return response()->json([
+            'success' => false,
+            'error' => 'Error al consultar estado: ' . $e->getMessage()
+        ], 500);
+    }
+}
+
+public function saveconstruccionescenariomejorado(Request $request){
+    try{
+        // Validar las URLs y archivos
+        $validator = Validator::make($request->all(), [
+            'construccionescenariomejorado' => 'required|string',
+            'id_account' => 'required|integer',
+            'id_generated' => 'required|integer',
+        ]);
+
+        if ($validator->fails()) {
+            return response()->json(['error' => $validator->errors()]);
+        }
+        $construccionescenariomejorado = $request->input('construccionescenariomejorado');
+        $accountId = $request->input('id_account');
+        $id_generated = $request->input('id_generated');
+
+        $generated = Generated::find($id_generated);
+
+        if (!$generated) {
+            return response()->json([
+                'success' => false,
+                'error' => 'Generación no encontrada'
+            ]);
+        }
+
+        $metadata = $generated->metadata ? json_decode($generated->metadata, true) : [];
+        if ($metadata) {
+
+            $metadata['construccionescenario'] = $construccionescenariomejorado;
+            $metadata['step'] = 6;
+
+            $generated->update([
+                'name' => 'Elige campaña en proceso...',
+                'metadata' => json_encode($metadata)
+            ]);
+
+            return response()->json(['success' => true, 'data' => $construccionescenariomejorado, 'function' => 'saveconstruccionescenariomejorado', 'id_generated' => $generated->id]);
+        }else{
+            return response()->json(['success' => false, 'error' => 'faltan datos']);
+        }
+    }catch(\Exception $e){
+        return response()->json(['success' => false, 'error' => $e->getMessage()]);
+    }
+}
+
+public function setGenerarCreatividad(Request $request){
+    try{
+        // Validar las URLs y archivos
+        
+        $validator = Validator::make($request->all(), [
+            '360_Tipo_de_campaña' => 'required|string',
+            'id_account' => 'required|integer',
+            'id_generated' => 'required|integer',
+        ]);
+
+        if ($validator->fails()) {
+            return response()->json(['error' => $validator->errors()]);
+        }
+
+        ini_set('max_execution_time', 300);
+
+        $accountId = $request->input('id_account');
+        $account = Account::find($accountId);
+        $id_generated = $request->input('id_generated');
+
+        $generated = Generated::find($id_generated);
+        if (!$generated) {
+            return response()->json([
+                'success' => false,
+                'error' => 'Generación no encontrada'
+            ]);
+        }
+        
+        $metadata = $generated->metadata ? json_decode($generated->metadata, true) : [];
+
+        if ($metadata) {
+            $generatedBrief = Generated::find($metadata['id_brief']);
+            if (!$generatedBrief) {
+                return response()->json([
+                    'success' => false,
+                    'error' => 'Generación no encontrada'
+                ]);
+            }
+            $metadataBrief = $generatedBrief->metadata ? json_decode($generatedBrief->metadata, true) : [];
+        
+            $category = $account->category;
+            Log::info("Categoria encontrada", [
+                'Categoría' => $category,
+            ]);
+            $brief = $metadata['brief'];
+            $objective = $metadata['objective'];
+            $genesis = $metadata['genesis'];
+            $fuentesGenesis= $metadata['genesis_insight_fuentes_html'];
+            $fuentesEscenario= $metadata['escenario_insight_fuentes_html'];
+            $construccionescenario = $metadata['construccionescenario'];
+            $genesiscompleto = $genesis . $construccionescenario;
+            $Tipodecampaña = $request->input('360_Tipo_de_campaña');
+
+            $metadata['tipo_de_campaña'] = $Tipodecampaña;
+            
+            $country = $metadataBrief['country'];
+
+            $creatividad = $this->generarCreatividad($Tipodecampaña, $objective, $genesiscompleto, $brief, $category);
+            if(!$creatividad['success']){
+                return response()->json(['success' => false, 'error' => $creatividad['error']]);
+            }
+            $metadata['generacion_creatividad_data'] = $creatividad['data'];
+            $metadata['generacion_creatividad_status'] = 'processing';
+            
+            $metadata['step'] = 7;
+            $generated->update([
+                'name' => 'Generando creatividad...',
+                'metadata' => json_encode($metadata)
+            ]);
+
+            return response()->json(['success' => true, 'data' => $creatividad['data'], 'function' => 'setGenerarCreatividad', 'id_generated' => $generated->id]);
+        }else{
+            return response()->json(['success' => false, 'error' => 'faltan datos']);
+        }
+    }catch(\Exception $e){
+        return response()->json(['success' => false, 'error' => $e->getMessage()]);
+    }
+}
+
+public function get_construccion_creatividad($generationId){
+    try {
+        Log::info("Inicio de get_construccion_creatividad");
+        $generated = Generated::find($generationId);
+        
+        if (!$generated) {
+            return response()->json([
+                'success' => false,
+                'error' => 'Generación no encontrada'
+            ], 404);
+        }
+
+        $metadata = $generated->metadata ? json_decode($generated->metadata, true) : [];
+
+        $contentCreatividad = $metadata['generacion_creatividad_content'] ?? '';
+        $sourcesCreatividad = $metadata['generacion_creatividad_sources'] ?? [];
+        $statusgenerated = 'processing';
+
+        // $genesis = $metadata['genesis'];
+        // $fuentesGenesis= $metadata['genesis_insight_fuentes_html'];
+        // $fuentesEscenario= $metadata['escenario_insight_fuentes_html'];
+        // $construccionescenario = $metadata['construccionescenario'];
+        // $brief = $metadata['brief'];
+        // $objective = $metadata['objective'];
+        // $genesiscompleto = $genesis . $construccionescenario;
+        // $Tipodecampaña = $metadata['tipo_de_campaña'];
+
+        $id_generacion_creatividad = $metadata['generacion_creatividad_data']['id'] ?? null;
+        // $id_generacion_estrategia = $metadata['generacion_estrategia_data']['id'] ?? null;
+        // $id_generacion_ideas_contenido = $metadata['generacion_ideas_contenido_data']['id'] ?? null;
+
+        $statusgeneratedCreatividad = $metadata['generacion_creatividad_status'] ?? 'processing';
+        // $statusgeneratedEstrategia = $metadata['generacion_estrategia_status'] ?? 'processing';
+        // $statusgeneratedIdeasContenido = $metadata['generacion_ideas_contenido_status'] ?? 'processing';
+
+        if($statusgeneratedCreatividad != 'completed'){
+            Log::info("Consultando estado de creatividad");
+            $responseCreatividad = OpenAiService::getModelResponse($id_generacion_creatividad);
+            if(isset($responseCreatividad['success']) && !$responseCreatividad['success']){
+                Log::error('Error en respuesta de OpenAI', [
+                    'error' => $responseCreatividad['error']
+                ]);
+            }else{
+                if($responseCreatividad['data']['status'] === 'completed'){
+                    $statusgeneratedCreatividad = 'completed';
+                    $statusgenerated = 'completed';
+                    if (isset($responseCreatividad['data']['output'])) {
+                        foreach ($responseCreatividad['data']['output'] as $output_item) {
+                            if ($output_item['type'] === 'message') {
+                                if (isset($output_item['content'][0]['text'])) {
+                                    $contentCreatividad = $output_item['content'][0]['text'];
+                                }
+                                if (isset($output_item['content'][0]['annotations'])) {
+                                    foreach($output_item['content'][0]['annotations'] as $annotation){
+                                        if($annotation['type'] === 'url_citation'){
+                                            $sourcesCreatividad[] = $annotation['url'];
+                                        }
+                                    }
+                                }
+                            }
+                        }
+                    }
+                    $metadata['generacion_creatividad_content'] = $contentCreatividad;
+                    $metadata['generacion_creatividad_sources'] = $sourcesCreatividad;
+                    $metadata['generacion_creatividad_status'] = 'completed';
+                    $generated->update([
+                        'metadata' => json_encode($metadata)
+                    ]);
+                }
+            }
+        }
+
+        // if($statusgeneratedCreatividad === 'completed' && $statusgeneratedEstrategia === 'completed'){
+        //     Log::info("Generación de creatividad y estrategia completadas");
+        //     if($id_generacion_ideas_contenido == null){
+        //         Log::info("Creando generación de ideas de contenido");
+        //         $ideasContenido = $this->generarIdeasContenido($Tipodecampaña, $objective, $genesiscompleto, $brief, $contentCreatividad, $contentEstrategia );
+        //         if(!$ideasContenido['success']){
+        //             return response()->json(['success' => false, 'error' => $ideasContenido['error']]);
+        //         }
+        //         $metadata['generacion_ideas_contenido_data'] = $ideasContenido['data'];
+        //         $metadata['generacion_ideas_contenido_status'] = 'processing';
+        //         $generated->update([
+        //             'metadata' => json_encode($metadata)
+        //         ]);
+        //         $id_generacion_ideas_contenido = $ideasContenido['data']['id'];
+        //     }
+
+        //     if($statusgeneratedIdeasContenido != 'completed'){
+        //         Log::info("Consultando estado de ideas de contenido");
+        //         $responseIdeasContenido = OpenAiService::getModelResponse($id_generacion_ideas_contenido);
+        //         if(isset($responseIdeasContenido['success']) && !$responseIdeasContenido['success']){
+        //             Log::error('Error en respuesta de OpenAI', [
+        //                 'error' => $responseIdeasContenido['error']
+        //             ]);
+        //         }else{
+        //             if($responseIdeasContenido['data']['status'] === 'completed'){
+        //                 $statusgeneratedIdeasContenido = 'completed';
+        //                 $statusgenerated = 'completed';
+        //                 if (isset($responseIdeasContenido['data']['output'])) {
+        //                     foreach ($responseIdeasContenido['data']['output'] as $output_item) {
+        //                         if ($output_item['type'] === 'message') {
+        //                             if (isset($output_item['content'][0]['text'])) {
+        //                                 $contentIdeasContenido = $output_item['content'][0]['text'];
+        //                             }
+        //                             if (isset($output_item['content'][0]['annotations'])) {
+        //                                 foreach($output_item['content'][0]['annotations'] as $annotation){
+        //                                     if($annotation['type'] === 'url_citation'){
+        //                                         $sourcesIdeasContenido[] = $annotation['url'];
+        //                                     }
+        //                                 }
+        //                             }
+        //                         }
+        //                     }
+                            
+        //                 }
+        //                 $metadata['generacion_ideas_contenido_content'] = $contentIdeasContenido;
+        //                 $metadata['generacion_ideas_contenido_sources'] = $sourcesIdeasContenido;
+        //                 $metadata['generacion_ideas_contenido_status'] = 'completed';
+        //                 $generated->update([
+        //                     'metadata' => json_encode($metadata)
+        //                 ]);
+        //             }
+        //         }
+        //     }
+        // }
+
+        if($statusgenerated === 'completed'){
+            Log::info("Generación de creatividad, estrategia e ideas de contenido completadas");
+
+            $metadata['generacion_creatividad_content'] = $contentCreatividad;
+            $metadata['generacion_creatividad_sources'] = $sourcesCreatividad;
+            $metadata['generacion_creatividad_status'] = 'completed';
+
+            $generated->update([
+                'metadata' => json_encode($metadata)
+            ]);
+
+            return response()->json([
+                'success' => true,
+                'status' => 'completed',
+                'generation_id' => $generated->id,
+                'data' => $contentCreatividad,
+                'sources' => $sourcesCreatividad
+            ]);
+        }else{
+            return response()->json([
+                'success' => true,
+                'status' => $generated->status,
+                'generation_id' => $generated->id
+            ]);
+        }
+
+    } catch (\Exception $e) {
+        Log::error('Error en generarIdeasContenido', [
+            'error' => $e->getMessage()
+        ]);
+        return response()->json([
+            'success' => false,
+            'error' => 'Error al consultar estado: ' . $e->getMessage()
+        ], 500);
+    }
+}
+
+public function setGenerarEstrategia(Request $request){
+    try{
+        // Validar las URLs y archivos
+        $validator = Validator::make($request->all(), [
+            '360_Tipo_de_campaña' => 'required|string',
+            'id_account' => 'required|integer',
+            'id_generated' => 'required|integer',
+            'construccioncreatividad' => 'required|string',
+        ]);
+
+        if ($validator->fails()) {
+            return response()->json(['error' => $validator->errors()]);
+        }
+
+        ini_set('max_execution_time', 300);
+
+        $accountId = $request->input('id_account');
+        $account = Account::find($accountId);
+        $id_generated = $request->input('id_generated');
+        $construccioncreatividad = $request->input('construccioncreatividad');
+
+        $generated = Generated::find($id_generated);
+        if (!$generated) {
+            return response()->json([
+                'success' => false,
+                'error' => 'Generación no encontrada'
+            ]);
+        }
+        
+        $metadata = $generated->metadata ? json_decode($generated->metadata, true) : [];
+
+        if ($metadata) {
+            $generatedBrief = Generated::find($metadata['id_brief']);
+            if (!$generatedBrief) {
+                return response()->json([
+                    'success' => false,
+                    'error' => 'Generación no encontrada'
+                ]);
+            }
+            $metadataBrief = $generatedBrief->metadata ? json_decode($generatedBrief->metadata, true) : [];
+        
+            $category = $account->category;
+            Log::info("Categoria encontrada", [
+                'Categoría' => $category,
+            ]);
+            $brief = $metadata['brief'];
+            $objective = $metadata['objective'];
+            $genesis = $metadata['genesis'];
+            $fuentesGenesis= $metadata['genesis_insight_fuentes_html'];
+            $fuentesEscenario= $metadata['escenario_insight_fuentes_html'];
+            $construccionescenario = $metadata['construccionescenario'];
+            $genesiscompleto = $genesis . $construccionescenario;
+            $Tipodecampaña = $request->input('360_Tipo_de_campaña');
+
+            $metadata['tipo_de_campaña'] = $Tipodecampaña;
+            
+            $country = $metadataBrief['country'];
+
+            $estrategia = $this->generarEstrategia($Tipodecampaña, $objective, $genesiscompleto, $country, $brief);
+            if(!$estrategia['success']){
+                return response()->json(['success' => false, 'error' => $estrategia['error']]);
+            }
+            $metadata['generacion_estrategia_data'] = $estrategia['data'];
+            $metadata['generacion_estrategia_status'] = 'processing';
+
+            $metadata['generacion_creatividad_content'] = $construccioncreatividad;
+            
+            $metadata['step'] = 7.1;
+            $generated->update([
+                'name' => 'Generando estrategia...',
+                'metadata' => json_encode($metadata)
+            ]);
+
+            return response()->json(['success' => true, 'data' => $estrategia['data'], 'function' => 'setGenerarEstrategia', 'id_generated' => $generated->id]);
+        }else{
+            return response()->json(['success' => false, 'error' => 'faltan datos']);
+        }
+    }catch(\Exception $e){
+        return response()->json(['success' => false, 'error' => $e->getMessage()]);
+    }
+}
+
+public function get_construccion_estrategia($generationId){
+    try {
+        Log::info("Inicio de get_construccion_estrategia");
+        $generated = Generated::find($generationId);
+        
+        if (!$generated) {
+            return response()->json([
+                'success' => false,
+                'error' => 'Generación no encontrada'
+            ], 404);
+        }
+
+        $metadata = $generated->metadata ? json_decode($generated->metadata, true) : [];
+
+        $contentEstrategia = $metadata['generacion_estrategia_content'] ?? '';
+        $sourcesEstrategia = $metadata['generacion_estrategia_sources'] ?? [];
+
+        $statusgenerated = 'processing';
+
+        $id_generacion_estrategia = $metadata['generacion_estrategia_data']['id'] ?? null;
+        $statusgeneratedEstrategia = $metadata['generacion_estrategia_status'] ?? 'processing';
+
+        if($statusgeneratedEstrategia != 'completed'){
+            Log::info("Consultando estado de estrategia");
+            $responseEstrategia = OpenAiService::getModelResponse($id_generacion_estrategia);
+            if(isset($responseEstrategia['success']) && !$responseEstrategia['success']){
+                Log::error('Error en respuesta de OpenAI', [
+                    'error' => $responseEstrategia['error']
+                ]);
+            }else{
+                if($responseEstrategia['data']['status'] === 'completed'){
+                    $statusgeneratedEstrategia = 'completed';
+                    $statusgenerated = 'completed';
+                    if (isset($responseEstrategia['data']['output'])) {
+                        foreach ($responseEstrategia['data']['output'] as $output_item) {
+                            if ($output_item['type'] === 'message') {
+                                if (isset($output_item['content'][0]['text'])) {
+                                    $contentEstrategia = $output_item['content'][0]['text'];
+                                }
+                                if (isset($output_item['content'][0]['annotations'])) {
+                                    foreach($output_item['content'][0]['annotations'] as $annotation){
+                                        if($annotation['type'] === 'url_citation'){
+                                            $sourcesEstrategia[] = $annotation['url'];
+                                        }
+                                    }
+                                }
+                            }
+                        }
+                    }
+                    $metadata['generacion_estrategia_content'] = $contentEstrategia;
+                    $metadata['generacion_estrategia_sources'] = $sourcesEstrategia;
+                    $metadata['generacion_estrategia_status'] = 'completed';
+                    $generated->update([
+                        'metadata' => json_encode($metadata)
+                    ]);
+                }
+            }
+        }
+
+        if($statusgenerated === 'completed'){
+            Log::info("Generación de estrategia completada");
+
+            $metadata['generacion_estrategia_content'] = $contentEstrategia;
+            $metadata['generacion_estrategia_sources'] = $sourcesEstrategia;
+            $metadata['generacion_estrategia_status'] = 'completed';
+
+            $generated->update([
+                'metadata' => json_encode($metadata)
+            ]);
+
+            return response()->json([
+                'success' => true,
+                'status' => 'completed',
+                'generation_id' => $generated->id,
+                'data' => $contentEstrategia,
+                'sources' => $sourcesEstrategia
+            ]);
+        }else{
+            return response()->json([
+                'success' => true,
+                'status' => $generated->status,
+                'generation_id' => $generated->id
+            ]);
+        }
+
+    } catch (\Exception $e) {
+        Log::error('Error en get_construccion_estrategia', [
+            'error' => $e->getMessage()
+        ]);
+        return response()->json([
+            'success' => false,
+            'error' => 'Error al consultar estado: ' . $e->getMessage()
+        ], 500);
+    }
+}
+
+public function setGenerarIdeasContenido(Request $request){
+    try{
+        // Validar las URLs y archivos
+        $validator = Validator::make($request->all(), [
+            '360_Tipo_de_campaña' => 'required|string',
+            'id_account' => 'required|integer',
+            'id_generated' => 'required|integer',
+            'construccioncreatividad' => 'required|string',
+            'construccionestrategia' => 'required|string',
+        ]);
+
+        if ($validator->fails()) {
+            return response()->json(['error' => $validator->errors()]);
+        }
+
+        ini_set('max_execution_time', 300);
+
+        $accountId = $request->input('id_account');
+        $account = Account::find($accountId);
+        $id_generated = $request->input('id_generated');
+        $construccioncreatividad = $request->input('construccioncreatividad');
+        $construccionestrategia = $request->input('construccionestrategia');
+
+        $generated = Generated::find($id_generated);
+        if (!$generated) {
+            return response()->json([
+                'success' => false,
+                'error' => 'Generación no encontrada'
+            ]);
+        }
+        
+        $metadata = $generated->metadata ? json_decode($generated->metadata, true) : [];
+
+        if ($metadata) {
+            $generatedBrief = Generated::find($metadata['id_brief']);
+            if (!$generatedBrief) {
+                return response()->json([
+                    'success' => false,
+                    'error' => 'Generación no encontrada'
+                ]);
+            }
+            $metadataBrief = $generatedBrief->metadata ? json_decode($generatedBrief->metadata, true) : [];
+        
+            $category = $account->category;
+            Log::info("Categoria encontrada", [
+                'Categoría' => $category,
+            ]);
+            $brief = $metadata['brief'];
+            $objective = $metadata['objective'];
+            $genesis = $metadata['genesis'];
+            $fuentesGenesis= $metadata['genesis_insight_fuentes_html'];
+            $fuentesEscenario= $metadata['escenario_insight_fuentes_html'];
+            $construccionescenario = $metadata['construccionescenario'];
+            $genesiscompleto = $genesis . $construccionescenario;
+            $Tipodecampaña = $request->input('360_Tipo_de_campaña');
+
+            $metadata['tipo_de_campaña'] = $Tipodecampaña;
+            
+            $country = $metadataBrief['country'];
+
+            $ideasContenido = $this->generarIdeasContenido($Tipodecampaña, $objective, $genesiscompleto, $brief, $construccioncreatividad, $construccionestrategia );
+            if(!$ideasContenido['success']){
+                return response()->json(['success' => false, 'error' => $ideasContenido['error']]);
+            }
+            $metadata['generacion_ideas_contenido_data'] = $ideasContenido['data'];
+            $metadata['generacion_ideas_contenido_status'] = 'processing';
+
+            $metadata['generacion_creatividad_content'] = $construccioncreatividad;
+            $metadata['generacion_estrategia_content'] = $construccionestrategia;
+            
+            $metadata['step'] = 7.2;
+            $generated->update([
+                'name' => 'Generando ideas de contenido...',
+                'metadata' => json_encode($metadata)
+            ]);
+
+            return response()->json(['success' => true, 'data' => $ideasContenido['data'], 'function' => 'setGenerarIdeasContenido', 'id_generated' => $generated->id]);
+
+        }else{
+            return response()->json(['success' => false, 'error' => 'faltan datos']);
+        }
+    }catch(\Exception $e){
+        return response()->json(['success' => false, 'error' => $e->getMessage()]);
+    }
+}
+
+public function get_construccion_ideasContenido($generationId){
+    try {
+        Log::info("Inicio de get_construccion_ideasContenido");
+        $generated = Generated::find($generationId);
+        
+        if (!$generated) {
+            return response()->json([
+                'success' => false,
+                'error' => 'Generación no encontrada'
+            ], 404);
+        }
+
+        $metadata = $generated->metadata ? json_decode($generated->metadata, true) : [];
+
+        $contentIdeasContenido = $metadata['generacion_ideas_contenido_content'] ?? '';
+        $sourcesIdeasContenido = $metadata['generacion_ideas_contenido_sources'] ?? [];
+        $statusgenerated = 'processing';
+
+        $id_generacion_ideas_contenido = $metadata['generacion_ideas_contenido_data']['id'] ?? null;
+
+        $statusgeneratedIdeasContenido = $metadata['generacion_ideas_contenido_status'] ?? 'processing';
+
+        if($statusgeneratedIdeasContenido != 'completed'){
+            Log::info("Consultando estado de ideas de contenido");
+            $responseIdeasContenido = OpenAiService::getModelResponse($id_generacion_ideas_contenido);
+            if(isset($responseIdeasContenido['success']) && !$responseIdeasContenido['success']){
+                Log::error('Error en respuesta de OpenAI', [
+                    'error' => $responseIdeasContenido['error']
+                ]);
+            }else{
+                if($responseIdeasContenido['data']['status'] === 'completed'){
+                    $statusgeneratedIdeasContenido = 'completed';
+                    $statusgenerated = 'completed';
+                    if (isset($responseIdeasContenido['data']['output'])) {
+                        foreach ($responseIdeasContenido['data']['output'] as $output_item) {
+                            if ($output_item['type'] === 'message') {
+                                if (isset($output_item['content'][0]['text'])) {
+                                    $contentIdeasContenido = $output_item['content'][0]['text'];
+                                }
+                                if (isset($output_item['content'][0]['annotations'])) {
+                                    foreach($output_item['content'][0]['annotations'] as $annotation){
+                                        if($annotation['type'] === 'url_citation'){
+                                            $sourcesIdeasContenido[] = $annotation['url'];
+                                        }
+                                    }
+                                }
+                            }
+                        }
+                        
+                    }
+                    $metadata['generacion_ideas_contenido_content'] = $contentIdeasContenido;
+                    $metadata['generacion_ideas_contenido_sources'] = $sourcesIdeasContenido;
+                    $metadata['generacion_ideas_contenido_status'] = 'completed';
+                    $generated->update([
+                        'metadata' => json_encode($metadata)
+                    ]);
+                }
+            }
+        }
+        
+        if($statusgenerated === 'completed'){
+            Log::info("Generación de creatividad, estrategia e ideas de contenido completadas");
+
+            $metadata['generacion_ideas_contenido_content'] = $contentIdeasContenido;
+            $metadata['generacion_ideas_contenido_sources'] = $sourcesIdeasContenido;
+            $metadata['generacion_ideas_contenido_status'] = 'completed';
+
+            $generated->update([
+                'metadata' => json_encode($metadata)
+            ]);
+
+            return response()->json([
+                'success' => true,
+                'status' => 'completed',
+                'generation_id' => $generated->id,
+                'data' => $contentIdeasContenido,
+                'sources' => $sourcesIdeasContenido
+            ]);
+        }else{
+            return response()->json([
+                'success' => true,
+                'status' => $generated->status,
+                'generation_id' => $generated->id
+            ]);
+        }
+
+    } catch (\Exception $e) {
+        Log::error('Error en generarIdeasContenido', [
+            'error' => $e->getMessage()
+        ]);
+        return response()->json([
+            'success' => false,
+            'error' => 'Error al consultar estado: ' . $e->getMessage()
+        ], 500);
+    }
+}
+
+public function saveGenerarIdeasContenido(Request $request){
+    try{
+        // Validar las URLs y archivos
+        $validator = Validator::make($request->all(), [
+            '360_Tipo_de_campaña' => 'required|string',
+            'id_account' => 'required|integer',
+            'id_generated' => 'required|integer',
+            'construccioncreatividad' => 'required|string',
+            'construccionestrategia' => 'required|string',
+            'construccionideascontenido' => 'required|string',
+        ]);
+
+        if ($validator->fails()) {
+            return response()->json(['error' => $validator->errors()]);
+        }
+
+        ini_set('max_execution_time', 300);
+
+        $accountId = $request->input('id_account');
+        $account = Account::find($accountId);
+        $id_generated = $request->input('id_generated');
+        $construccioncreatividad = $request->input('construccioncreatividad');
+        $construccionestrategia = $request->input('construccionestrategia');
+        $construccionideascontenido = $request->input('construccionideascontenido');
+
+        $generated = Generated::find($id_generated);
+        if (!$generated) {
+            return response()->json([
+                'success' => false,
+                'error' => 'Generación no encontrada'
+            ]);
+        }
+        
+        $metadata = $generated->metadata ? json_decode($generated->metadata, true) : [];
+
+        if ($metadata) {
+            $generatedBrief = Generated::find($metadata['id_brief']);
+            if (!$generatedBrief) {
+                return response()->json([
+                    'success' => false,
+                    'error' => 'Generación no encontrada'
+                ]);
+            }
+            $metadataBrief = $generatedBrief->metadata ? json_decode($generatedBrief->metadata, true) : [];
+        
+            $category = $account->category;
+            Log::info("Categoria encontrada", [
+                'Categoría' => $category,
+            ]);
+            $brief = $metadata['brief'];
+            $objective = $metadata['objective'];
+            $genesis = $metadata['genesis'];
+            $fuentesGenesis= $metadata['genesis_insight_fuentes_html'];
+            $fuentesEscenario= $metadata['escenario_insight_fuentes_html'];
+            $construccionescenario = $metadata['construccionescenario'];
+            $genesiscompleto = $genesis . $construccionescenario;
+            $Tipodecampaña = $request->input('360_Tipo_de_campaña');
+
+            $metadata['tipo_de_campaña'] = $Tipodecampaña;
+
+            $metadata['generacion_creatividad_content'] = $construccioncreatividad;
+            $metadata['generacion_estrategia_content'] = $construccionestrategia;
+            $metadata['generacion_ideas_contenido_content'] = $construccionideascontenido;
+            
+            $metadata['step'] = 8;
+            $generated->update([
+                'name' => 'Generando resultado final...',
+                'metadata' => json_encode($metadata)
+            ]);
+
+            $content = ['genesis' =>  $genesis,'fuentesGenesis'=>$fuentesGenesis,'escenario'=>$construccionescenario ,'fuentesEscenario'=>$fuentesEscenario, 'estrategia' => $construccionestrategia, 'creatividad' => $construccioncreatividad, 'contenido' => $construccionideascontenido];
+
+            return response()->json(['success' => true, 'data' => $content, 'function' => 'mostrarResultadoFinal', 'id_generated' => $generated->id]);
+
+        }else{
+            return response()->json(['success' => false, 'error' => 'faltan datos']);
+        }
+    }catch(\Exception $e){
+        return response()->json(['success' => false, 'error' => $e->getMessage()]);
     }
 }
 
@@ -771,13 +1972,14 @@ public function generateNewCreatividadEstrategiaInnovacion(Request $request){
         'type' => 'required|string',
         'creatividad' => 'required|string',
         'estrategia' => 'required|string',
-    ]);
+        'id_generated' => 'required|integer',
+    ]); 
 
     if ($validator->fails()) {
         return response()->json(['error' => $validator->errors()]);
     }
 
-    ini_set('max_execution_time', 300);
+    ini_set('max_execution_time', 600);
 
     $accountId = $request->input('account');
     $account = Account::find($accountId);
@@ -787,14 +1989,23 @@ public function generateNewCreatividadEstrategiaInnovacion(Request $request){
     $creatividad = $request->input('creatividad');
     $estrategia = $request->input('estrategia');
     $accountData = Field::where('account_id', $accountId)->pluck('value', 'key');
+    $id_generated = $request->input('id_generated');
+    $generated = Generated::find($id_generated);
+    if (!$generated) {
+        return response()->json([
+            'success' => false,
+            'error' => 'Generación no encontrada'
+        ]);
+    }
+    $metadata = $generated->metadata ? json_decode($generated->metadata, true) : [];
 
     if ($accountData) {
         // Buscar el registro existente
-        $brief = $accountData->get('Brief');
-        $objective = $accountData->get('360_objective');
-        $genesis = $accountData->get('360_genesis');
-        $construccionescenario = $accountData->get('360_construccionescenario');
-        $Tipodecampaña = $accountData->get('360_Tipo_de_campaña');
+        $brief = $metadata['brief'];
+        $objective = $metadata['objective'];
+        $genesis = $metadata['genesis'];
+        $construccionescenario = $metadata['construccionescenario'];
+        $Tipodecampaña = $metadata['tipo_de_campaña'];
         $country = $accountData->get('country');
 
         switch ($type) {
@@ -821,7 +2032,115 @@ public function generateNewCreatividadEstrategiaInnovacion(Request $request){
     }
 
 }
-public function generarCreatividad($Tipodecampaña, $objective, $genesiscompleto, $brief, $category)
+public function generarCreatividad($Tipodecampaña, $objective, $genesiscompleto, $brief, $category, $modelo = 'gpt-5')
+{
+    try {
+        ini_set('max_execution_time', 600);
+        Log::info("Inicio de generarCreatividad", [
+            'Tipo de campaña' => $Tipodecampaña,
+            'Objetivo' => $objective,
+            'Categoría recibida' => $category
+        ]);
+
+        // Mapeo categoría -> vector_store_ids
+        $categoryVectorStores = [
+            'Alimentación y Bebidas'                   => 'vs_67e2ae4650588191b31d8b8224d0ac47',
+            'Moda y Belleza'                           => 'vs_67e2c08d6dbc81918e82f768e2e40ca9',
+            'Salud y Bienestar'                        => 'vs_67e2c1889d80819189d3e9f982470163',
+            'Tecnología y Electrónica'                 => 'vs_67e2c3211aec8191845de6144c927a39',
+            'Educación y Formación'                    => 'vs_67e2c39720e48191b46f2d0a02138ba1',
+            'Turismo y Entretenimiento'                => 'vs_67e2c5798354819186b610df3b1488d1',
+            'Automotriz y Transporte'                  => 'vs_67e2c62a81bc8191b666df23826ce005',
+            'Bienes Raíces y Construcción'             => 'vs_67e2c6e31c708191b345afc4c53aa916',
+            'Servicios Profesionales'                  => 'vs_67e2c7fc2c6c819188bef5fd84dad404',
+            'Deportes y Fitness'                       => 'vs_67e2c9854cd08191b5afe3b76fe4a36c',
+            'Salud y Medicina'                         => 'vs_67e2ca0cb83881918d49eed54fdbfdc2',
+            'E-commerce y Tiendas Online'              => 'vs_67e2cb4b90d08191a7b757db58fcbd0b',
+            'Bienestar y Estilo de Vida'               => 'vs_67e2cc0850ec8191abea747444f70980',
+            'Hogar y Decoración'                       => 'vs_67e2cdc951e08191a8f4f5a74789a235',
+            'Servicios Financieros'                    => 'vs_67e2cf37e2088191ba8654ad414bce1a',
+            'Energía y Sostenibilidad'                 => 'vs_67e2d462492c8191b316476dd2aec789',
+            'Agronegocios y Agroindustria'             => 'vs_67e2d55450d881919f61b5ee38eb1075',
+            'Medios, Comunicación y Contenido Digital' => 'vs_67e2d75ad19c81918ad687bf856b68b0',
+            'Logística y Cadena de Suministro'         => 'vs_WIikAxBR2wfrELhu6On7ALVt',
+            'Emprendimiento e Innovación'              => 'vs_67e2d8fa265c8191a14d802f759ae7e0',
+            'Arte, Cultura y Creatividad'              => 'vs_67e2da50d71c8191a17c2df1d768296c',
+            'Negocios B2B y Servicios Industriales'    => 'vs_67e2dcfc62ac8191b5048aa381ec4336',
+            'Gaming y eSports'                         => 'vs_67e2ddf1a2cc81919b720e353d43c2dd',
+            'Otra'                                  => 'vs_WIikAxBR2wfrELhu6On7ALVt',
+        ];
+
+        // ID especial para "Otra" o null
+        $vectorIdOtra = 'vs_WIikAxBR2wfrELhu6On7ALVt';
+
+        // Resolver el vector store según categoría
+        if ($category === null || strtolower($category) === 'otra') {
+            $vectorIds = [$vectorIdOtra];
+        } else {
+            $vectorEntry = $categoryVectorStores[$category] ?? $categoryVectorStores['default'];
+            $vectorIds = is_array($vectorEntry) ? $vectorEntry : [$vectorEntry];
+        }
+
+        // Opciones para el chat-prompt
+        $options = [
+            'model' => $modelo,
+            'prompt' => [
+                'id' => 'pmpt_68c9cde4f2ac8196b3a33b12c74e47790435d1a45d459271',
+                
+                'variables' => [
+                    'tipo_campania' => $Tipodecampaña,
+                    'objetivo' => $objective,
+                    'genesis' => $genesiscompleto,
+                    'brief' => $brief
+                ]
+            ],
+            'tools' => [
+                [
+                    'type' => 'file_search',
+                    'vector_store_ids' => $vectorIds
+                ]
+            ],
+            'background' => true,
+        ];
+
+        Log::info('Llamando OpenAiService::createModelResponse (Creatividad)', [
+            'category' => $category,
+            'vector_store_ids' => json_encode($vectorIds)
+        ]);
+
+        $response = OpenAiService::createModelResponse($options);
+
+        if (isset($response['error'])) {
+            Log::error('Error en generarCreatividad', [
+                'error' => $response['error']
+            ]);
+            return ['success' => false, 'error' => $response['error']];
+        }
+
+        // Extraer la respuesta final del asistente
+        // $textoFinal = '';
+        // if (isset($response['data']['output']) && is_array($response['data']['output'])) {
+        //     foreach ($response['data']['output'] as $block) {
+        //         if (($block['type'] === 'message' || $block['type'] === 'assistant')
+        //             && isset($block['content'][0]['text'])) {
+        //             $textoFinal = $block['content'][0]['text'];
+        //             break;
+        //         }
+        //     }
+        // }
+
+        Log::info('Respuesta OpenAiService::createModelResponse (Creatividad)');
+
+        return ['success' => true, 'data' => $response['data']];
+
+    } catch (\Exception $e) {
+        Log::error('Excepción en generarCreatividad', [
+            'exception' => $e->getMessage()
+        ]);
+        return ['success' => false, 'error' => 'Error al procesar la solicitud de IA.'];
+    }
+}
+public function generarCreatividadold($Tipodecampaña, $objective, $genesiscompleto, $brief, $category)
 {
     Log::info("Inicio de generarCreatividad", [
         'Tipo de campaña' => $Tipodecampaña,
@@ -853,7 +2172,6 @@ public function generarCreatividad($Tipodecampaña, $objective, $genesiscompleto
         'Arte, Cultura y Creatividad'              => 'asst_FW8JGyhxYi7H2ICAZZejJ3EX',
         'Negocios B2B y Servicios Industriales'    => 'asst_RqZhkeC0xGoCCYSKGJd4kHZr',
         'Gaming y eSports'                         => 'asst_KkeCs6HRWNYyiqWMa4JgSSmo',
-        'Otra'                                     => 'asst_dBtNQk8BArQyo9GNndD19lEQ',
     ];
     
 
@@ -887,9 +2205,100 @@ EOT;
     return OpenAiService::CompletionsAssistants($promptCreatividad, $assistant_idCreatividad);
 }
 
+public function generarEstrategia($Tipodecampaña, $objective, $genesiscompleto, $country, $brief, $modelo = 'gpt-5')
+{
+    try {
+        ini_set('max_execution_time', 600);
+        // Mapeo de países a vector_store_ids
+        $vectorStores = [
+            'Bolivia' => 'vs_67d056778cb08191a576ad35aa08e40f',
+            'Argentina' => 'vs_67d05805f67c8191b72413bcc4ed007f',
+            'Chile' => 'vs_67d058836eec8191ae9e68ccbdfb97b9',
+            'Colombia' => 'vs_67d075c66ea88191bdefe97058130ffc',
+            'Costa Rica' => 'vs_67d077079f388191a5c1b50154ac0b8b',
+            'Ecuador' => 'vs_67d078d06b5c81919076005ba58cc6b6',
+            'Guatemala' => 'vs_67d07d4e6b008191965bcd5b67f17223',
+            'Honduras' => 'vs_67d07f90406c8191826a9d2b09ed2e73',
+            'México' => 'vs_67d082c70f3c8191a1cd533b271331ed',
+            'Nicaragua' => 'vs_67d084b3b2b08191a771895ffee3ed04',
+            'Panamá' => 'vs_67d087007d7c81918476b7a20116bae4',
+            'Paraguay' => 'vs_67d088e01b6c8191bf51e013a9994464',
+            'Perú' => 'vs_67d08bf93ac88191b92a65da3128f9bf',
+            'Puerto Rico' => 'vs_67d08def19a4819191d8eb6e66a5dfe3',
+            'Uruguay' => 'vs_67d08f82493081919f0f18ec30e0aed7',
+            'El Salvador' => 'vs_67d09143d81881919811ffe0e936dabd',
+            'Brasil' => 'vs_67d093034f3c8191a22bd3436dd75ed0',
+            'República Dominicana' => 'vs_67d095d76cc8819190c0288b47ee0d6f',
+        ];
+
+        // Buscar el vector store para el país
+        $vectorId = $vectorStores[$country] ?? null;
+
+        if (!$vectorId) {
+            return ['success' => false, 'error' => "No se encontró vector_store para el país: $country"];
+        }
+
+        // Opciones para la API
+        $options = [
+            'model' => $modelo,
+            'prompt' => [
+                'id' => 'pmpt_68c3468147e48193ab09564bc856756905b09529b9ba957c',
+                'variables' => [
+                    'tipo_campania' => $Tipodecampaña,
+                    'pais' => $country,
+                    'objetivo' => $objective,
+                    'brief' => $brief,
+                    'genesis' => $genesiscompleto
+                ]
+            ],
+            'tools' => [
+                [
+                    'type' => 'file_search',
+                    'vector_store_ids' => [$vectorId]
+                ]
+            ],
+            'background' => true,
+        ];
+
+        $response = OpenAiService::createModelResponse($options);
+
+        if (isset($response['error'])) {
+            Log::error('Error en generarEstrategia', [
+                'error' => $response['error']
+            ]);
+            return ['success' => false, 'error' => $response['error']];
+        }
+
+        // Extraer la respuesta final del asistente
+        // $textoFinal = '';
+        // if (isset($response['data']['output']) && is_array($response['data']['output'])) {
+        //     foreach ($response['data']['output'] as $block) {
+        //         if ($block['type'] === 'message' && isset($block['content'][0]['text'])) {
+        //             $textoFinal = $block['content'][0]['text'];
+        //             break; // Tomamos solo el primer mensaje
+        //         }
+        //     }
+        // }
+
+        // Log::info('Respuesta OpenAiService::createModelResponse (Estrategia Digital)', [
+        //     'response' => $textoFinal
+        // ]);
+        Log::info('Data enviada', [
+            'response' => $vectorId
+        ]);
+
+        return ['success' => true, 'data' => $response['data']];
+
+    } catch (\Exception $e) {
+        Log::error('Excepción en generarEstrategia', [
+            'exception' => $e->getMessage()
+        ]);
+        return ['success' => false, 'error' => 'Error al procesar la solicitud de IA.'];
+    }
+}
 
 
-public function generarEstrategia($Tipodecampaña, $objective, $genesiscompleto, $country, $brief){
+public function generarEstrategiaold($Tipodecampaña, $objective, $genesiscompleto, $country, $brief){
     switch ($country) {
         case 'Argentina':
             $assistant_id = 'asst_BvDMPlQNMPiWKGSHi8YgTiyS';
@@ -989,8 +2398,71 @@ EOT;
 
     return OpenAiService::CompletionsAssistants($prompt, $assistant_id);
 }
+public function generarIdeasContenido($Tipodecampaña, $objective, $genesiscompleto, $brief, $creatividad, $estrategia, $modelo = 'gpt-5')
+{
+    try {
+        ini_set('max_execution_time', 600);
+        Log::info('Iniciando contenido ideas con');
+        $options = [
+            'model' => $modelo,
+            'prompt' => [
+                'id' => 'pmpt_68cad29e51848196846bfe853574f0590b7a0c62264f6ee6',
+               
+                'variables' => [
+                    'brief' => $brief,
+                    'objetivo' => $objective,
+                    'genesis' => $genesiscompleto,
+                    'tipo_campania' => $Tipodecampaña,
+                    'estrategia' => $estrategia,
+                    'creatividad' => $creatividad
+                ]
+            ],
+            'tools' => [
+                [
+                    'type' => 'file_search',
+                    'vector_store_ids' => ['vs_WIikAxBR2wfrELhu6On7ALVt']
+                ]
+            ],
+            'background' => true,
+        ];
 
-public function generarIdeasContenido($Tipodecampaña, $objective, $genesiscompleto, $brief, $creatividad, $estrategia ){
+        $response = OpenAiService::createModelResponse($options);
+
+        if (isset($response['error'])) {
+            Log::error('Error en generarIdeasContenido', [
+                'error' => $response['error']
+            ]);
+            return ['success' => false, 'error' => $response['error']];
+        }
+
+        // Extraer el texto de salida
+        // $textoFinal = '';
+        // if (isset($response['data']['output']) && is_array($response['data']['output'])) {
+        //     foreach ($response['data']['output'] as $block) {
+        //         if (
+        //             ($block['type'] === 'message' || $block['type'] === 'assistant')
+        //             && isset($block['content'][0]['text'])
+        //         ) {
+        //             $textoFinal = $block['content'][0]['text'];
+        //             break;
+        //         }
+        //     }
+        // }
+
+        // Log::info('Respuesta OpenAiService::createModelResponse (IdeasContenido)', [
+        //     'response_preview' => $response['data']
+        // ]);
+
+        return ['success' => true, 'data' => $response['data']];
+
+    } catch (\Exception $e) {
+        Log::error('Excepción en generarIdeasContenido', [
+            'exception' => $e->getMessage()
+        ]);
+        return ['success' => false, 'error' => 'Error al procesar la solicitud de IA.'];
+    }
+}
+public function generarIdeasContenidoold($Tipodecampaña, $objective, $genesiscompleto, $brief, $creatividad, $estrategia ){
 
     $promptIdeasContenido = <<<EOT
     Genera las mejores 50 Ideas de contenido respetando el brief, la estrategia digital, las plataformas seleccionadas y el concepto creativo.
@@ -1034,65 +2506,95 @@ EOT;
 }
 
 public function saveEstrategiaCreatividadInnovacion(Request $request){
-    // Validar las URLs y archivos
-    $validator = Validator::make($request->all(), [
-        'construccionCreatividad' => 'required|string',
-        'construccionEstrategia' => 'required|string',
-        'construccionIdeasContenido' => 'required|string',
-        //'construccionInnovacion' => 'required|string',
-        'account' => 'required|integer',
-        'file_name' => 'required|string',
-        'rating' => 'required|integer',
-    ]);
+    try{
+        // Validar las URLs y archivos
+        $validator = Validator::make($request->all(), [
+            // 'construccionCreatividad' => 'required|string',
+            // 'construccionEstrategia' => 'required|string',
+            // 'construccionIdeasContenido' => 'required|string',
+            //'construccionInnovacion' => 'required|string',
+            'id_account' => 'required|integer',
+            'file_name' => 'required|string',
+            'rating' => 'required|integer',
+            'id_generated' => 'required|integer',
+        ]);
 
-    if ($validator->fails()) {
-        return response()->json(['error' => $validator->errors()]);
-    }
-
-    // ini_set('max_execution_time', 300);
-
-    $accountId = $request->input('account');
-    $accountData = Field::where('account_id', $accountId)->pluck('value', 'key');
-
-    if ($accountData) {
-        // Buscar el registro existente
-        $brief = $accountData->get('Brief');
-        $objective = $accountData->get('360_objective');
-        $genesis = $accountData->get('360_genesis');
-        $fuentesGenesis= $accountData->get('fuentesGenesis');
-        $fuentesEscenario= $accountData->get('fuentesEscenario');
-        $construccionescenario = $accountData->get('360_construccionescenario');
-        $estrategia = $request->input('construccionEstrategia');
-        $creatividad = $request->input('construccionCreatividad');
-        $contenido = $request->input('construccionIdeasContenido');
-        //$innovacion = $request->input('construccionInnovacion');
-
-        $fields = [
-            'construccionCreatividad' => $creatividad,
-            'construccionEstrategia' => $estrategia,
-            'construccionIdeasContenido' => $contenido,
-            //'construccionInnovacion' => $innovacion,
-        ];
-
-        $resultGenesis = $genesis . '<br><br>' .$fuentesGenesis . '<br><br>' .$construccionescenario . '<br><br>'.$fuentesEscenario. '<br><br>'. $creatividad . '<br><br>' . $estrategia . '<br><br>' . $contenido;
-
-        Generated::Create(
-            ['account_id' => $accountId, 'key' => 'Genesis', 'name' => $request->input('file_name'), 'value' => $resultGenesis, 'rating' => $request->input('rating')],
-        );    
-
-        foreach ($fields as $key => $value) {
-            if (!is_null($value)) {
-                Field::updateOrCreate(
-                    ['account_id' => $accountId, 'key' => $key],
-                    ['value' => $value]
-                );
-            }
+        if ($validator->fails()) {
+            return response()->json(['error' => $validator->errors()]);
         }
 
-        $response = ['genesis' => $genesis,'fuentesGenesis'=>$fuentesGenesis,'escenario'=>$construccionescenario,'fuentesEscenario'=>$fuentesEscenario, 'creatividad' => $creatividad, 'estrategia' => $estrategia, 'contenido' => $contenido];
+        // ini_set('max_execution_time', 300);
 
-        return response()->json(['success' => 'Datos procesados correctamente.', 'details' => $response, 'goto' => 7, 'function' => 'mostrarEstrategiaCreatividadInnovacion']);
+        $accountId = $request->input('id_account');
+        // $accountData = Field::where('account_id', $accountId)->pluck('value', 'key');
 
+        $id_generated = $request->input('id_generated');
+        $generated = Generated::find($id_generated);
+        if (!$generated) {
+            return response()->json([
+                'success' => false,
+                'error' => 'Generación no encontrada'
+            ]);
+        }
+        $metadata = $generated->metadata ? json_decode($generated->metadata, true) : [];
+
+        if ($metadata) {
+            // Buscar el registro existente
+            $brief = $metadata['brief'];
+            $objective = $metadata['objective'];
+            $genesis = $metadata['genesis'];
+            $fuentesGenesis = $metadata['genesis_insight_fuentes_html'];
+            $fuentesEscenario = $metadata['escenario_insight_fuentes_html'];
+            $construccionescenario = $metadata['construccionescenario'];
+            $estrategia = $metadata['generacion_estrategia_content'];
+            $creatividad = $metadata['generacion_creatividad_content'];
+            $contenido = $metadata['generacion_ideas_contenido_content'];
+            //$innovacion = $request->input('construccionInnovacion');
+
+            // $fields = [
+            //     'construccionCreatividad' => $creatividad,
+            //     'construccionEstrategia' => $estrategia,
+            //     'construccionIdeasContenido' => $contenido,
+            //     //'construccionInnovacion' => $innovacion,
+            // ];
+
+            // $metadata['generacion_creatividad_data'] = $creatividad;
+            // $metadata['generacion_estrategia_data'] = $estrategia;
+            // $metadata['generacion_ideas_contenido_data'] = $contenido;
+
+            $resultGenesis = $genesis . '<br><br>' .$fuentesGenesis . '<br><br>' .$construccionescenario . '<br><br>'.$fuentesEscenario. '<br><br>'. $creatividad . '<br><br>' . $estrategia . '<br><br>' . $contenido;
+
+            $metadata['step'] = 8.1;
+
+            $generated->update([
+                'key' => 'Genesis',
+                'name' => $request->input('file_name'),
+                'value' => $resultGenesis,
+                'rating' => $request->input('rating'),
+                'status' => 'completed',
+                'metadata' => json_encode($metadata)
+            ]);
+
+            // Generated::Create(
+            //     ['account_id' => $accountId, 'key' => 'Genesis', 'name' => $request->input('file_name'), 'value' => $resultGenesis, 'rating' => $request->input('rating')],
+            // );    
+
+            // foreach ($fields as $key => $value) {
+            //     if (!is_null($value)) {
+            //         Field::updateOrCreate(
+            //             ['account_id' => $accountId, 'key' => $key],
+            //             ['value' => $value]
+            //         );
+            //     }
+            // }
+
+            // $response = ['genesis' => $genesis,'fuentesGenesis'=>$fuentesGenesis,'escenario'=>$construccionescenario,'fuentesEscenario'=>$fuentesEscenario, 'creatividad' => $creatividad, 'estrategia' => $estrategia, 'contenido' => $contenido];
+
+            return response()->json(['success' => true, 'data' => 'Datos guardados correctamente', 'function' => 'construccionGenesisGuardado', 'id_generated' => $generated->id]);
+
+        }
+    }catch(\Exception $e){
+        return response()->json(['success' => false, 'error' => $e->getMessage()]);
     }
 }
 
@@ -1100,6 +2602,7 @@ public function download(Request $request)
 {
     $validator = Validator::make($request->all(), [
         'account' => 'required|integer',
+        'id_generated' => 'required|integer',
     ]);
 
     if ($validator->fails()) {
@@ -1107,17 +2610,26 @@ public function download(Request $request)
     }
 
     $accountId = $request->input('account');
-    $accountData = Field::where('account_id', $accountId)->pluck('value', 'key');
+    $id_generated = $request->input('id_generated');
+    $generated = Generated::find($id_generated);
+    if (!$generated) {
+        return response()->json([
+            'success' => false,
+            'error' => 'Generación no encontrada'
+        ]);
+    }
+    $metadata = $generated->metadata ? json_decode($generated->metadata, true) : [];
+    // $accountData = Field::where('account_id', $accountId)->pluck('value', 'key');
 
-    if ($accountData) {
+    if ($metadata) {
         // Buscar el registro existentes
-        $construccionescenario = $accountData->get('360_construccionescenario');
-        $genesis = $accountData->get('360_genesis');
-        $fuentesGenesis= $accountData->get('fuentesGenesis');
-        $fuentesEscenario= $accountData->get('fuentesEscenario');
-        $estrategia = $accountData->get('construccionEstrategia');
-        $creatividad = $accountData->get('construccionCreatividad');
-        $contenido = $accountData->get('construccionIdeasContenido');
+        $construccionescenario = $metadata['construccionescenario'];
+        $genesis = $metadata['genesis'];
+        $fuentesGenesis = $metadata['genesis_insight_fuentes_html'];
+        $fuentesEscenario = $metadata['escenario_insight_fuentes_html'];
+        $estrategia = $metadata['generacion_estrategia_data'];
+        $creatividad = $metadata['generacion_creatividad_data'];
+        $contenido = $metadata['generacion_ideas_contenido_data'];
         //$innovacion = $accountData->get('construccionInnovacion');
 
         $fields = [
@@ -1130,6 +2642,7 @@ public function download(Request $request)
             'contenido' => $contenido,
             //'innovacion' => $innovacion,
         ];
+
     }
 
     // Cargar la vista Blade que contiene la plantilla PDF

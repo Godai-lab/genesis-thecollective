@@ -46,6 +46,8 @@ $paises = [
 
                     ['label'=>'Archivos (sube archivos relevantes que ayuden a construir un buen brief)','type'=>'dynamic-list-file', 'limit' =>5, 'name'=>'files', 'id'=>'files', 'col'=>'sm:col-span-4', 'value'=>old('urls'), 'attr'=>'accept=.pdf,.doc,.docx,.xls,.xlsx,.txt', 'description'=>'Puedes adjuntar hasta 5 archivos de hasta 20 Mb, pueden ser .pdf/.doc./.txt'],
 
+                    ['label'=>'Investigación','type'=>'select', 'name'=>'investigation[]', 'id'=>'investigation', 'col'=>'sm:col-span-4', 'value'=>old('investigation'), 'attr'=>'multiple', 'list'=>[], 'description'=>'Puedes seleccionar la investigación que deseas utilizar'],
+
                     ['label'=>'Tienes información de tu mercado (estudios, competencia, análisis, documentación), súbelo aquí:','type'=>'singlefile', 'name'=>'files', 'id'=>'fileextra1', 'col'=>'sm:col-span-4', 'value'=>old('fileextra1'), 'attr'=>'accept=.pdf,.doc,.docx,.xls,.xlsx,.txt', 'description'=>'Puedes adjuntar 1 archivo de hasta 20 Mb, pueden ser .pdf/.doc./.txt'],
 
                     ['label'=>'Tienes un documento de construcción de FODA ya establecido, súbelo aquí:','type'=>'singlefile', 'name'=>'files', 'id'=>'fileextra2', 'col'=>'sm:col-span-4', 'value'=>old('fileextra2'), 'attr'=>'accept=.pdf,.doc,.docx,.xls,.xlsx,.txt', 'description'=>'Puedes adjuntar 1 archivo de hasta 20 Mb, pueden ser .pdf/.doc./.txt'],
@@ -72,5 +74,19 @@ $paises = [
             </div>
         </form>
     </div>
+
+    <script>
+        const select = document.getElementById("investigation");
+        const max = 5;
+      
+        select.addEventListener("change", function () {
+          const seleccionados = [...select.selectedOptions];
+          if (seleccionados.length > max) {
+            // deselecciona el último que intentó marcar
+            seleccionados[seleccionados.length - 1].selected = false;
+            alert("Solo puedes seleccionar hasta " + max + " opciones");
+          }
+        });
+      </script>
     
 </div>

@@ -34,7 +34,7 @@ $paises = [
         ],
         'o4-mini-deep-research' => [
             'name' => 'OpenAI o4-mini Deep Research',
-            'price' => '$0.15',
+            'price' => 'de 0.50 a 1.00 usd aprox.',
             'priceUnit' => 'por investigación',
             'description' => 'Modelo equilibrado entre velocidad y profundidad de análisis',
             'bestFor' => 'Investigaciones medias, análisis detallados, reportes completos',
@@ -43,7 +43,7 @@ $paises = [
         ],
         'o3-deep-research' => [
             'name' => 'OpenAI o3 Deep Research',
-            'price' => '$0.25',
+            'price' => 'de 1.50 a 4.00 usd aprox.',
             'priceUnit' => 'por investigación',
             'description' => 'Modelo de investigación profunda para análisis complejos y detallados',
             'bestFor' => 'Investigaciones complejas, análisis exhaustivos, estudios académicos',
@@ -63,7 +63,8 @@ $paises = [
                     ['label'=>'País','type'=>'select', 'name'=>'country', 'id'=>'country', 'col'=>'sm:col-span-4', 'value'=>old('country'), 'attr'=>'data-validation-rules=required data-field-name=país', 'list'=>$paises],
 
                     ['label'=>'Nombre de la marca','placeholder'=>'Escribe el nombre de la marca','type'=>'text', 'name'=>'brand', 'id'=>'brand', 'col'=>'sm:col-span-4', 'value'=>old('brand'), 'attr'=>'data-validation-rules=required|max:100 data-field-name=marca'],
-                    ['label'=>'Describe tu investigacion','placeholder'=>'Escribe tu instrucción sobre la investigación para tu marca','type'=>'textarea', 'name'=>'instruccion', 'id'=>'instruccion', 'col'=>'sm:col-span-4', 'value'=>old('instruccion'), 'attr'=>'data-validation-rules=required|max:400 data-field-name=instruccion'],
+
+                    ['label'=>'Describe tu investigacion','placeholder'=>'Escribe tu instrucción sobre la investigación para tu marca','type'=>'textarea', 'name'=>'instruccion', 'id'=>'instruccion', 'col'=>'sm:col-span-4', 'value'=>old('instruccion'), 'attr'=>'data-validation-rules=required|max:1000 data-field-name=instruccion'],
                 ]"
                 >
                 <h2 class="text-base font-semibold leading-7 text-black dark:text-gray-100">Investigación</h2>

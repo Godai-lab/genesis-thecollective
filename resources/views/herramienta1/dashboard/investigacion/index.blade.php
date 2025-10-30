@@ -465,8 +465,7 @@
                                                                     icon: 'success',
                                                                     title: 'Investigación en proceso, esto puede tomar varios minutos. Puedes cerrar esta ventana y volver más tarde.',
                                                                     showConfirmButton: false,
-                                                                    timer: 6000,
-                                                                    timerProgressBar: true
+                                                            
                                                                 });
                                                                 iniciarPollingInvestigacion(data.generation_id, contenedor);
                                                             } 
@@ -693,6 +692,7 @@
 
         // Función para iniciar el polling de la investigación
         function iniciarPollingInvestigacion(generationId, contenedor) {
+            let timeout;
             const mensaje = contenedor.querySelector('.message');
             if (mensaje) {
                 mensaje.innerHTML = `
@@ -720,12 +720,12 @@
                     });
 
                     const data = await response.json();
-                    console.log('Estado de generación:', data);
 
                     // if (data.success) {
                         if (data.status === 'completed') {
                             // La investigación está completa
                             clearInterval(pollInterval);
+                            clearTimeout(timeout);
                             console.log('Investigación completada');
                             
                             // Procesar la respuesta
@@ -775,6 +775,7 @@
                 } catch (error) {
                     console.error('Error en polling:', error);
                     clearInterval(pollInterval);
+                    clearTimeout(timeout);
                     
                     if (mensaje) {
                         mensaje.innerHTML = `
@@ -790,18 +791,18 @@
             }, 5000); // Consultar cada 5 segundos
 
             // Timeout de seguridad (máximo 10 minutos)
-            setTimeout(() => {
+            timeout = setTimeout(() => {
                 clearInterval(pollInterval);
                 if (mensaje) {
                     mensaje.innerHTML = `
                         <div class="alert alert-warning">
                             <i class="fas fa-clock mr-2"></i>
-                            Tiempo de espera agotado. La investigación puede estar aún en proceso.
+                            Tiempo de espera agotado. La investigación puede estar aún en proceso. Puedes cerrar esta ventana y volver más tarde.
                         </div>
                     `;
                 }
                 contenedor.style.display = 'block';
-            }, 600000); // 10 minutos
+            }, 900000); // 15 minutos
         }
     </script>
 </x-app-layout>

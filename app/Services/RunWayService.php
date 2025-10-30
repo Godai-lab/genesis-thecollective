@@ -227,11 +227,15 @@ public static function generateGen3aTurboVideo(
 
         $payload = [
             "promptImage" => $promptImage,
-            "promptText" => $promptText,
             "ratio" => $ratio,
             "model" => $model,
             "duration" => $duration
         ];
+
+        // Solo incluir promptText si hay contenido
+        if (!empty(trim($promptText))) {
+            $payload["promptText"] = $promptText;
+        }
 
         $data_string = json_encode($payload);
 

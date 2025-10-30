@@ -36,7 +36,26 @@ class Herramienta1Controller extends Controller
         $objetivos = $this->objetivos;
         $rangoedad = $this->rangoedad;
 
-        return view('herramienta1.index', compact('accounts','objetivos','rangoedad'));
+        // Si el parámetro 'generated' está presente, intentamos continuar una generación existente.
+        // Si no, se inicia una nueva generación.
+        $data_generated = [];
+        $id_generated = $request->query('generated'); // Será null si no viene en la URL
+
+        if ($id_generated) {
+            $generated = Generated::find($id_generated);
+            if ($generated && $generated->key === 'Brief') {
+                $metadata = $generated->metadata ? json_decode($generated->metadata, true) : [];
+                $step = isset($metadata['step']) ? $metadata['step'] : null;
+                $data_generated = [
+                    'id_generated' => $generated->id,
+                    'account_id' => $generated->account_id,
+                    'step' => $step,
+                    'metadata' => $metadata
+                ];
+            }
+        }
+
+        return view('herramienta1.index', compact('accounts', 'objetivos', 'rangoedad', 'data_generated'));
 
     }
 
@@ -454,13 +473,16 @@ public function GenerarBriefGenerateIA(Request $request)
     $validator = Validator::make($request->all(), [
         '_token' => 'required',
         'account' => 'required|integer',
+        'id_generated' => 'nullable|integer',
         'country' => 'required|string',
         'name' => 'required|string',
         'slogan' => 'nullable|string',
         'urls' => 'nullable|array|max:5',
         'urls.*' => 'nullable|url',
         'files' => 'nullable|array|max:5',
-        'files.*' => 'nullable|file|mimes:pdf,doc,docx,xls,xlsx,txt|max:20480'
+        'files.*' => 'nullable|file|mimes:pdf,doc,docx,xls,xlsx,txt|max:20480',
+        'investigation' => 'nullable|array|max:5',
+        'investigation[]' => 'nullable|integer',
     ]);
 // Aseguramos que el script tenga 600 segundos de tiempo máximo
 set_time_limit(600);
@@ -471,28 +493,58 @@ ini_set('max_execution_time', 600);
     }
 
     $accountId = $request->input('account');
-    // Filtramos los parámetros para excluir _token y account
-    $parameters = $request->except('_token', 'account', 'urls', 'files');
+    $id_generated = $request->input('id_generated');
 
-    try {
-        foreach ($parameters as $key => $value) {
-            // Si el valor es un array, lo convertimos a JSON para guardarlo
-            if (is_array($value)) {
-                $value = json_encode($value);
+    $metadata = [
+        'country' => $request->input('country'),
+        'name' => $request->input('name'),
+        'slogan' => $request->input('slogan'),
+        'started_at' => now()->toISOString(),
+        'step' => 2,
+    ];
+
+    if($id_generated){
+        $generated = Generated::find($id_generated);
+        if (!$generated) {
+            return response()->json([
+                'success' => false,
+                'error' => 'Generación no encontrada '.$id_generated
+                ]);
             }
-            // Actualizar o crear el registro en una sola línea
-            Field::updateOrCreate(
-                ['key' => $key, 'account_id' => $accountId],
-                ['value' => $value]
-            );
-        }
-    } catch (\Exception $e) {
-        Log::error('Error al guardar parámetros en la base de datos', [
-            'exception' => $e->getMessage(),
-            'parameters' => $parameters
+    }else{
+        $generated = Generated::create([
+            'account_id' => $accountId,
+            'key' => 'Brief',
+            'name' => 'Brief en proceso - ' . $request->input('name'),
+            'value' => '<div class="text-center p-4"><div class="spinner-border" role="status"></div><p class="mt-2">Generando Brief...</p></div>',
+            'rating' => null,
+            'status' => 'processing', // Nuevo campo para el estado
+            'metadata' => json_encode($metadata)
         ]);
-        return response()->json(['error' => 'Error al guardar los datos del formulario.'], 500);
     }
+    
+    // Filtramos los parámetros para excluir _token y account
+    // $parameters = $request->except('_token', 'account', 'urls', 'files');
+
+    // try {
+    //     foreach ($parameters as $key => $value) {
+    //         // Si el valor es un array, lo convertimos a JSON para guardarlo
+    //         if (is_array($value)) {
+    //             $value = json_encode($value);
+    //         }
+    //         // Actualizar o crear el registro en una sola línea
+    //         Field::updateOrCreate(
+    //             ['key' => $key, 'account_id' => $accountId],
+    //             ['value' => $value]
+    //         );
+    //     }
+    // } catch (\Exception $e) {
+    //     Log::error('Error al guardar parámetros en la base de datos', [
+    //         'exception' => $e->getMessage(),
+    //         'parameters' => $parameters
+    //     ]);
+    //     return response()->json(['error' => 'Error al guardar los datos del formulario.'], 500);
+    // }
 
     // Obtener las URLs y los archivos validados, filtrando los vacíos
     $urls = array_filter($request->input('urls', []), function ($url) {
@@ -501,15 +553,19 @@ ini_set('max_execution_time', 600);
     $files = array_filter($request->file('files', []), function ($file) {
         return $file && $file->isValid();
     });
+    $investigation = array_filter($request->input('investigation', []), function ($investigation) {
+        return !empty($investigation);
+    });
 
     // Validar que al menos una URL o un archivo se esté enviando
-    if (empty($urls) && empty($files)) {
-        Log::warning('No se envió ninguna URL ni archivo');
-        return response()->json(['error' => 'Debes enviar al menos una URL o un archivo.']);
+    if (empty($urls) && empty($files) && empty($investigation)) {
+        Log::warning('No se envió ninguna URL ni archivo ni investigación');
+        return response()->json(['error' => 'Debes enviar al menos una URL o un archivo o una investigación.']);
     }
 
     $contentSite = [];
     $contentFile = [];
+    $contentInvestigation = [];
 
     // Procesar URLs si existen
     if (!empty($urls)) {
@@ -567,6 +623,17 @@ ini_set('max_execution_time', 600);
                     'exception' => $e->getMessage()
                 ]);
             }
+        }
+    }
+
+    if (!empty($investigation)) {
+        foreach ($investigation as $investigationID) {
+            $investigationContent = Generated::find($investigationID);
+            if (!$investigationContent) {
+                Log::error('Investigación no encontrada', ['investigation_id' => $investigationID]);
+                continue;
+            }
+            $contentInvestigation[] = $investigationContent->value;
         }
     }
 
@@ -639,6 +706,9 @@ EOT;
     if (!empty($contentFile)) {
         $prompt .= "Contenido de archivos actualizados subido por el usuario" . json_encode($contentFile) . "\n";
     }
+    if (!empty($contentInvestigation)) {
+        $prompt .= "Contenido de investigaciones actualizadas subido por el usuario" . json_encode($contentInvestigation) . "\n";
+    }
     if (!empty($callperplexity)) {
         $prompt .= "Contenido de informacion buscado en internet" . json_encode($callperplexity) . "\n";
     }
@@ -670,19 +740,25 @@ EOT;
         return response()->json(['error' => 'Error al procesar la solicitud de IA.'], 500);
     }
 
-    try {
+    // try {
         // Guardar o actualizar la respuesta de la IA
-        Field::updateOrCreate(
-            ['key' => 'extraccionIA', 'account_id' => $accountId],
-            ['value' => $response['data']]
-        );
-    } catch (\Exception $e) {
-        Log::error('Error al guardar la respuesta de la IA', [
-            'exception' => $e->getMessage(),
-            'account_id' => $accountId
+        // Field::updateOrCreate(
+        //     ['key' => 'extraccionIA', 'account_id' => $accountId],
+        //     ['value' => $response['data']]
+        // );
+
+        $metadata['extraccionIA'] = $response['data'];
+        $generated->update([
+            'metadata' => json_encode($metadata)
         ]);
-        return response()->json(['error' => 'Error al guardar los datos de IA.'], 500);
-    }
+
+    // } catch (\Exception $e) {
+    //     Log::error('Error al guardar la respuesta de la IA', [
+    //         'exception' => $e->getMessage(),
+    //         'account_id' => $accountId
+    //     ]);
+    //     return response()->json(['error' => 'Error al guardar los datos de IA.'], 500);
+    // }
 
    
     $briefContent = $response['data']. "\n\n## **Fuentes**\n\n" . $fuentesFormatted;
@@ -692,13 +768,20 @@ EOT;
         'briefContent' => $briefContent
     ]);
 
+    $metadata['brief'] = $briefContent;
+    $metadata['step'] = 9;
+    $generated->update([
+        'metadata' => json_encode($metadata),
+    ]);
+
     return response()->json([
         'success' => 'Datos procesados correctamente.',
         'details' => [
             'data' => $briefContent, 
         ],
         'goto' => 9,
-        'function' => 'BriefGeneradoFormIA'
+        'function' => 'BriefGeneradoFormIA',
+        'id_generated' => $generated->id
     ]);
     // return response()->json([
     //     'success' => 'Datos procesados correctamente.',
@@ -719,6 +802,7 @@ EOT;
         $validator = Validator::make($request->all(), [
             '_token' => 'required',
             'account' => 'required|integer',
+            'id_generated' => 'nullable|integer',
             'Brief' => 'required|string',
             'file_name' => 'required|string',
             'rating' => 'required|integer'
@@ -729,22 +813,44 @@ EOT;
         }
 
         $accountId = $request->input('account');
-        $fields = [
-            'Brief' => $request->input('Brief'),
-        ];
-
-        Generated::Create(
-            ['account_id' => $accountId, 'key' => 'Brief', 'name' => $request->input('file_name'), 'value' => $request->input('Brief'), 'rating' => $request->input('rating')],
-        );
-
-        foreach ($fields as $key => $value) {
-            if (!is_null($value)) {
-                Field::updateOrCreate(
-                    ['account_id' => $accountId, 'key' => $key],
-                    ['value' => $value]
-                );
-            }
+        $id_generated = $request->input('id_generated');
+        $generated = Generated::find($id_generated);
+        if (!$generated) {
+            return response()->json([
+                'success' => false,
+                'error' => 'Generación no encontrada'
+            ]);
         }
+        // $fields = [
+        //     'Brief' => $request->input('Brief'),
+        // ];
+
+        // Generated::Create(
+        //     ['account_id' => $accountId, 'key' => 'Brief', 'name' => $request->input('file_name'), 'value' => $request->input('Brief'), 'rating' => $request->input('rating')],
+        // );
+
+        // foreach ($fields as $key => $value) {
+        //     if (!is_null($value)) {
+        //         Field::updateOrCreate(
+        //             ['account_id' => $accountId, 'key' => $key],
+        //             ['value' => $value]
+        //         );
+        //     }
+        // }
+
+
+        $metadata = $generated->metadata ? json_decode($generated->metadata, true) : [];
+        $metadata['brief'] = $request->input('Brief');
+        $metadata['step'] = 10;
+        $generated->update([
+            'key' => 'Brief',
+            'name' => $request->input('file_name'),
+            'value' => $request->input('Brief'),
+            'status' => 'completed',
+            'rating' => $request->input('rating'),
+            'metadata' => json_encode($metadata)
+        ]);
+
         return response()->json(['success' => 'Datos procesados correctamente.', 'details' => true, 'goto' => 10]);
     }
 

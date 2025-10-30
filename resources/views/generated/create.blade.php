@@ -1,3 +1,26 @@
+@php 
+$paises = [
+    ["id"=> "", "name"=> "Selecciona tu pais"],
+    ["id"=> "Argentina", "name"=> "Argentina"],
+    ["id"=> "Bolivia", "name"=> "Bolivia"],
+    ["id"=> "Brasil", "name"=> "Brasil"],
+    ["id"=> "Chile", "name"=> "Chile"],
+    ["id"=> "Colombia", "name"=> "Colombia"],
+    ["id"=> "Costa Rica", "name"=> "Costa Rica"],
+    ["id"=> "República Dominicana", "name"=> "República Dominicana"],
+    ["id"=> "Ecuador", "name"=> "Ecuador"],
+    ["id"=> "El Salvador", "name"=> "El Salvador"],
+    ["id"=> "Guatemala", "name"=> "Guatemala"],
+    ["id"=> "Honduras", "name"=> "Honduras"],
+    ["id"=> "México", "name"=> "México"],
+    ["id"=> "Nicaragua", "name"=> "Nicaragua"],
+    ["id"=> "Panamá", "name"=> "Panamá"],
+    ["id"=> "Paraguay", "name"=> "Paraguay"],
+    ["id"=> "Perú", "name"=> "Perú"],
+    ["id"=> "Puerto Rico", "name"=> "Puerto Rico"],
+    ["id"=> "Uruguay", "name"=> "Uruguay"],
+];
+@endphp
 <x-app-layout>
     <x-slot name="title">Brief - Agregar</x-slot>
     <x-slot name="header">
@@ -19,6 +42,12 @@
                                 :fields="[
                                     ['label'=>'Cuenta','type'=>'select', 'name'=>'account', 'id'=>'account', 'col'=>'sm:col-span-4', 'value'=>old('account'), 'attr'=>'data-validation-rules=required|max:50', 'list'=>$accounts],
                                     ['label'=>'Nombre','type'=>'text', 'name'=>'file_name', 'id'=>'file_name', 'col'=>'sm:col-span-4', 'value'=>old('file_name'), 'attr'=>'data-validation-rules=required|max:50 data-field-name=nombre'],
+
+                                    ['label'=>'País','type'=>'select', 'name'=>'country', 'id'=>'country', 'col'=>'sm:col-span-4', 'value'=>old('country'), 'attr'=>'data-validation-rules=required data-field-name=país', 'list'=>$paises],
+
+                                    ['label'=>'Nombre de la marca','placeholder'=>'Escribe el nombre de la marca','type'=>'text', 'name'=>'name', 'id'=>'name', 'col'=>'sm:col-span-3', 'value'=>old('name'), 'attr'=>'data-validation-rules=required|max:100 data-field-name=nombre'],
+
+                                    ['label'=>'Slogan','type'=>'text', 'name'=>'slogan', 'id'=>'slogan', 'col'=>'sm:col-span-3', 'value'=>old('slogan'), 'attr'=>'data-validation-rules=max:100 data-field-name=slogan'],
                                     
                                 ]" 
                             >

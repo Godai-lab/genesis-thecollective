@@ -40,6 +40,38 @@ class GeneratedController extends Controller
 
         return response()->json($Briefs);
     }
+    public function getGeneratedBriefV2(Request $request){
+        $validator = Validator::make($request->all(), [
+            'accountID' => 'required|integer',
+        ]);
+
+        if ($validator->fails()) {
+            return response()->json(['error' => $validator->errors()]);
+        }
+        $accountId = $request->input('accountID');
+
+        $Briefs = Generated::where('account_id',$accountId)
+        ->where('key','Brief')
+        ->where('status','completed')
+        ->where('metadata','!=',null)
+        ->get();
+
+        $Briefs = collect([
+            (object) [
+                'id' => '',
+                'name' => 'Ninguno'
+            ]
+        ])->concat(
+            $Briefs->map(function ($item) {
+                return (object) [
+                    'id' => $item->id,
+                    'name' => $item->name
+                ];
+            })
+        );
+
+        return response()->json($Briefs);
+    }
     public function getGeneratedGenesis(Request $request){
         $validator = Validator::make($request->all(), [
             'accountID' => 'required|integer',
@@ -66,6 +98,72 @@ class GeneratedController extends Controller
         );
 
         return response()->json($Genesis);
+    }
+
+    public function getGeneratedGenesisV2(Request $request){
+        $validator = Validator::make($request->all(), [
+            'accountID' => 'required|integer',
+        ]);
+
+        if ($validator->fails()) {
+            return response()->json(['error' => $validator->errors()]);
+        }
+        $accountId = $request->input('accountID');
+
+        $Genesis = Generated::where('account_id',$accountId)
+        ->where('key','Genesis')
+        ->where('status','completed')
+        ->where('metadata','!=',null)
+        ->get();
+
+        $Genesis = collect([
+            (object) [
+                'id' => '',
+                'name' => 'Ninguno'
+            ]
+        ])->concat(
+            $Genesis->map(function ($item) {
+                return (object) [
+                    'id' => $item->id,
+                    'name' => $item->name
+                ];
+            })
+        );
+
+        return response()->json($Genesis);
+    }
+
+    public function getGeneratedInvestigation(Request $request){
+        $validator = Validator::make($request->all(), [
+            'accountID' => 'required|integer',
+        ]);
+
+        if ($validator->fails()) {
+            return response()->json(['error' => $validator->errors()]);
+        }
+        $accountId = $request->input('accountID');
+
+        $investigation = Generated::where('account_id',$accountId)
+        ->where('key','Investigacion')
+        ->where('status','completed')
+        ->where('metadata','!=',null)
+        ->get();
+
+        $investigation = collect([
+            (object) [
+                'id' => '',
+                'name' => 'Ninguno'
+            ]
+        ])->concat(
+            $investigation->map(function ($item) {
+                return (object) [
+                    'id' => $item->id,
+                    'name' => $item->name
+                ];
+            })
+        );
+
+        return response()->json($investigation);
     }
 
     public function index(Request $request){
@@ -126,12 +224,29 @@ class GeneratedController extends Controller
         'account' => 'required|exists:accounts,id', // Verifica que la cuenta exista
         'brief' => 'required|string', // Validación del contenido
         'file_name' => 'required|string',
-        'rating' => 'required|integer|min:1|max:5'
+        'rating' => 'required|integer|min:1|max:5',
+        'country' => 'required|string',
+        'name' => 'required|string',
+        'slogan' => 'nullable|string',
     ]);
 
     if ($validator->fails()) {
         return response()->json(['error' => $validator->errors()], 422);
     }
+
+    $country = $request->input('country');
+    $name = $request->input('name');
+    $slogan = $request->input('slogan');
+
+    $metadata = [
+        'country' => $country,
+        'name' => $name,
+        'slogan' => $slogan,
+        'extraccionIA' => null,
+        'brief' => $request->input('brief'),
+        'started_at' => now()->toISOString(),
+        'step' => 10,
+    ];
 
     // Crear el registro
     Generated::create([
@@ -140,6 +255,8 @@ class GeneratedController extends Controller
         'name' => $request->input('file_name'),
         'value' => $request->input('brief'),
         'rating' => $request->input('rating'),
+        'status' => 'completed',
+        'metadata' => json_encode($metadata),
     ]);
 
     // Manejo de respuesta dependiendo del tipo de solicitud
@@ -199,5 +316,22 @@ class GeneratedController extends Controller
         // Descargar el PDF
         return $pdf->download('Generated_' . $timestamp . '.pdf');
 
+    }
+
+    public function continue(Generated $generated)
+    {
+        // Redirigir según el tipo de contenido
+        switch($generated->key) {
+            case 'Brief':
+                return redirect()->route('herramienta1.index', ['generated' => $generated->id]);
+            case 'Genesis':
+                return redirect()->route('herramienta2.index', ['generated' => $generated->id]);
+            case 'Investigacion':
+                return redirect()->route('investigacion.index', ['generated' => $generated->id]);
+            case 'Concepto':
+                return redirect()->route('validar-concepto.index', ['generated' => $generated->id]);
+            default:
+                return redirect()->route('herramienta1.index', ['generated' => $generated->id]);
+        }
     }
 }

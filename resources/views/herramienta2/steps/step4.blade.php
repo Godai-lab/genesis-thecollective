@@ -23,10 +23,10 @@
 <!-- step4.blade.php -->
 <div id="step-4-form">
     <div id="step-4-form-content">
-        <form id="step-4-form" method="POST" action="{{route('herramienta2.eleccioncampania')}}" data-validate="true">
+        <form id="step4Form" method="POST" action="{{route('herramienta2.saveconstruccionescenario')}}" data-validate="true">
             @csrf
             <input type="hidden" name="construccionescenario" id="construccionescenario"> 
-            <input type="hidden" name="genesisgenerado" id="genesisgenerado">
+            {{-- <input type="hidden" name="genesisgenerado" id="genesisgenerado"> --}}
             <!--nuevos campos -->
             <div style="display: none;" id="ResultadoAnterior" class="mb-4">
                 <h2 class="text-lg font-bold mb-4">Resultado anterior:</h2>
@@ -71,8 +71,8 @@
             
             <div class="mt-6 flex items-center flex-wrap justify-end gap-x-6 gap-y-2">
                 <x-button-genesis type="button" data-step="3" class="step-button">Regresar</x-button-genesis>
-                <x-button-genesis type="button" data-route="{{route('herramienta2.regenerarConstruccionEscenario')}}" data-form="btnconstruccionescenario" class="form-button-regenerate">Volver a generar</x-button-genesis>
-                <x-button-genesis type="button" data-step="5" class="step-button">Aceptar</x-button-genesis>
+                <x-button-genesis type="button" data-route="{{route('herramienta2.regenerarConstruccionEscenario')}}" data-btnForm="regenerarConstruccionEscenario" class="">Volver a generar</x-button-genesis>
+                <x-button-genesis type="button" id="btnsaveconstruccionescenario" class="" data-btnForm="btnSaveConstruccionEscenario">Aceptar</x-button-genesis>
             </div>
         </form>
     </div>

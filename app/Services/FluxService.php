@@ -149,7 +149,7 @@ class FluxService
     }
 }
 
-    public static function GenerateImageKontextPro(
+    public static function GenerateImageKontext(
     $modelo= null,   
     $prompt,
     $aspect_ratio = "16:9",
@@ -159,7 +159,8 @@ class FluxService
     $safety_tolerance = 2,
     $output_format = "jpeg",
     $webhook_url = null,
-    $webhook_secret = null
+    $webhook_secret = null,
+    $additional_images = [] // Nuevo parámetro para múltiples imágenes
 ) {
     try {
         $url = "https://api.us1.bfl.ai/v1/{$modelo}";
@@ -176,9 +177,25 @@ class FluxService
             $data["seed"] = $seed;
         }
 
-        // Si se proporciona imagen en base64, agregarla
+        // Si se proporciona imagen principal, agregarla (compatible hacia atrás)
         if (!empty($input_image)) {
             $data["input_image"] = $input_image;
+        }
+
+        // Si se proporcionan imágenes adicionales, agregarlas con campos enumerados
+        if (!empty($additional_images) && is_array($additional_images)) {
+            foreach ($additional_images as $index => $imageUrl) {
+                if ($index === 0) {
+                    // La primera imagen adicional va en input_image_2
+                    $data["input_image_2"] = $imageUrl;
+                } elseif ($index === 1) {
+                    $data["input_image_3"] = $imageUrl;
+                } elseif ($index === 2) {
+                    $data["input_image_4"] = $imageUrl;
+                }
+                // Máximo 4 imágenes totales (input_image + 3 adicionales)
+                if ($index >= 2) break;
+            }
         }
 
         if (!empty($webhook_url)) {

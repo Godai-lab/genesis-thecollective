@@ -20,7 +20,7 @@
                     type="button">
                     Continuar
                 </button> --}}
-                <x-button-genesis type="button" data-step="2" class="step-button">Continuar</x-button-genesis>
+                <x-button-genesis type="button" data-btnForm="accountForm">Continuar</x-button-genesis>
             </div>
         </form>
     </div>

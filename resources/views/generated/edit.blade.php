@@ -67,7 +67,10 @@
             var quill = new Quill('#editor-container-value', {
                 theme: 'snow'
             });
-            quill.clipboard.dangerouslyPasteHTML('{!! old('value', $generated->value) !!}');
+            
+            var value = @json(old('value', $generated->value));
+
+            quill.clipboard.dangerouslyPasteHTML(value);
 
             quill.on('text-change', function() {
                 const valueInput = document.getElementById('value');

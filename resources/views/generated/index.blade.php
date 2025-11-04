@@ -42,8 +42,13 @@
                         :thead="['Tipo','Nombre','Rating','Cuenta','Fecha Inicio','Fecha Fin']" 
                         :tbody="['key','name', 'rating','account.name','created_at','updated_at']" 
                         :route="'generated'" 
+                        :defaultButtons="false"
+                        :createButton="['type' => 'add', 'route' => 'generated.create']"
                         :buttons="[
-                            ['type' => 'custom', 'icon' => 'fa-solid fa-download', 'class' => 'bg-gray-700 hover:bg-gray-900', 'route' => 'generated.download', 'params' => ['generated' => 'id']]
+                            ['type' => 'edit', 'route' => 'generated.edit', 'params' => ['generated' => 'id'], 'conditions' => [['field' => 'status', 'operator' => '==', 'value' => 'completed']]],
+                            ['type' => 'custom', 'icon' => 'fa-solid fa-download', 'class' => 'bg-gray-700 hover:bg-gray-900', 'route' => 'generated.download', 'params' => ['generated' => 'id'], 'conditions' => [['field' => 'status', 'operator' => '==', 'value' => 'completed']]],
+                            ['type' => 'custom', 'icon' => 'fa-solid fa-play', 'class' => 'bg-gray-600 hover:bg-gray-500', 'route' => 'generated.continue', 'params' => ['generated' => 'id'], 'conditions' => [['field' => 'status', 'operator' => '!=', 'value' => 'completed'],['field' => 'metadata', 'operator' => 'not_empty']]],
+                            ['type' => 'delete', 'route' => 'generated.destroy', 'params' => ['generated' => 'id']],
                         ]" 
                         :data="$generateds" >
                     </x-dynamic-table>

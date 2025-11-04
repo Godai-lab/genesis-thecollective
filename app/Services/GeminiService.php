@@ -338,7 +338,8 @@ main();
         ?string $imageBase64 = null, // imagen opcional en base64
         int $numberOfVideos = 1,
         int $durationSeconds = 5,
-        string $personGeneration = "dont_allow"
+        string $personGeneration = "dont_allow",
+        ?string $imageMimeType = null // tipo MIME de la imagen opcional
     ) {
         try {
             $apiKey = env('GEMINI_API_KEY_GENERATE_IMAGE');
@@ -359,11 +360,17 @@ main();
     
             // Agregar imagen si se proporciona
             if ($imageBase64 !== null) {
+                // Usar el tipo MIME proporcionado o detectar automáticamente
+                $mimeType = $imageMimeType ?? "image/jpeg"; // Por defecto JPEG
+                
                 $instance["image"] = [
                     "bytesBase64Encoded" => $imageBase64,
-                    "mimeType" => "image/png" // o "image/jpeg" según el tipo
+                    "mimeType" => $mimeType
                 ];
-                Log::info('Agregando imagen a la solicitud de video');
+                Log::info('Agregando imagen a la solicitud de video', [
+                    'mimeType' => $mimeType,
+                    'imageSize' => strlen($imageBase64)
+                ]);
             }
     
             // Construir parámetros adicionales, excluyendo personGeneration y numberOfVideos si hay imagen
@@ -512,15 +519,17 @@ main();
     //         ];
     //     }
     // }
-    public static function getVideoOperation(string $operationId)
+    public static function getVideoOperation(string $operationName)
 {
     try {
         $apiKey = env('GEMINI_API_KEY_GENERATE_IMAGE');
-        $baseUrl = "https://generativelanguage.googleapis.com/v1beta";
-        $url = "{$baseUrl}/models/veo-2.0-generate-001/operations/{$operationId}?key={$apiKey}";
+        
+        // El operationName ya viene completo, solo agregamos la API key
+        $url = "https://generativelanguage.googleapis.com/v1beta/{$operationName}?key={$apiKey}";
         
         Log::info('Consultando estado de operación de video', [
-            'operationId' => $operationId
+            'operationName' => $operationName,
+            'url' => $url
         ]);
         
         $ch = curl_init();
@@ -585,6 +594,83 @@ main();
             'success' => false,
             'error' => $e->getMessage()
         ];
+        }
     }
-}
+    public static function generateContentImage($prompt, $files = [], $model = "gemini-2.5-flash-image-preview")
+    {
+        try {
+            $url = "https://generativelanguage.googleapis.com/v1beta/models/$model:generateContent";
+    
+            $parts = [
+                ["text" => $prompt]
+            ];
+    
+            if (!empty($files)) {
+                if (!is_array($files)) {
+                    $files = [$files];
+                }
+                foreach ($files as $file) {
+                    if (is_array($file) && isset($file['mime_type']) && isset($file['data'])) {
+                        $parts[] = ["inline_data" => ["mime_type" => $file['mime_type'], "data" => $file['data']]];
+                    } else {
+                        $parts[] = ["inline_data" => ["mime_type" => "image/jpeg", "data" => $file]];
+                    }
+                }
+            }
+    
+            $data = ["contents" => [["parts" => $parts]]];
+            $data_string = json_encode($data);
+    
+            $ch = curl_init();
+            curl_setopt($ch, CURLOPT_URL, $url);
+            curl_setopt($ch, CURLOPT_HTTPHEADER, [
+                'Content-Type: application/json',
+                'x-goog-api-key: ' . env('GEMINI_API_KEY_GENERATE_IMAGE')
+            ]);
+            curl_setopt($ch, CURLOPT_POST, 1);
+            curl_setopt($ch, CURLOPT_POSTFIELDS, $data_string);
+            curl_setopt($ch, CURLOPT_RETURNTRANSFER, true);
+            curl_setopt($ch, CURLOPT_SSL_VERIFYPEER, true);
+    
+            $response = curl_exec($ch);
+            if ($response === false) throw new \Exception('Error cURL: ' . curl_error($ch));
+            curl_close($ch);
+    
+            $response_data = json_decode($response, true);
+            if (json_last_error() !== JSON_ERROR_NONE) throw new \Exception('Error JSON: ' . json_last_error_msg());
+            if (isset($response_data['error'])) throw new \Exception('API Gemini: ' . $response_data['error']['message']);
+    
+            $images = [];
+            foreach ($response_data['candidates'] ?? [] as $candidate) {
+                foreach ($candidate['content']['parts'] ?? [] as $part) {
+                    if (isset($part['inlineData']['data'])) {
+                        $images[] = [
+                            'base64' => $part['inlineData']['data'],
+                            'mimeType' => $part['inlineData']['mimeType'] ?? 'image/png'
+                        ];
+                    }
+                }
+            }
+    
+            if (empty($images)) throw new \Exception('No se encontró imagen en la respuesta de Gemini.');
+    
+            return [
+                'success' => true,
+                'data' => $images
+            ];
+    
+        } catch (\Exception $e) {
+            return [
+                'success' => false,
+                'error' => [
+                    'message' => $e->getMessage(),
+                    'code' => $e->getCode(),
+                    'file' => $e->getFile(),
+                    'line' => $e->getLine()
+                ]
+            ];
+        }
+    }
+    
+
 }

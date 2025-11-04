@@ -5,5 +5,6 @@
             {{ __('Asistente Generativo') }}
         </h2>
     </x-slot>
-<livewire:new-generador />
+{{-- <livewire:new-generador /> --}}
+<livewire:generador.generador-main />
 </x-app-layout>

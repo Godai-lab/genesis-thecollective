@@ -8,12 +8,6 @@ class PerplexityService
     public static function ChatCompletions($text, $model="sonar", $temperature=1.0, $system_prompt = null)
     {
         try {
-            // Verificar que la clave API existe
-            if (empty(env('PERPLEXITY_API_KEY'))) {
-                Log::error('PerplexityService::ChatCompletions - Falta la clave API');
-                return ['error' => 'Falta configurar la clave API de Perplexity'];
-            }
-            
             $url = "https://api.perplexity.ai/chat/completions";
 
             $prompt = [];
@@ -35,18 +29,11 @@ class PerplexityService
             $data = array(
                 'model' => $model,
                 'messages' => $prompt,
-                'temperature' => $temperature
-                // 'max_tokens' => 100000 
+                'temperature' => $temperature,
+                'max_tokens' => 64000 
             );
 
             $data_string = json_encode($data);
-            
-            // Log: Request
-            Log::info('PerplexityService::ChatCompletions - Enviando solicitud', [
-                'model' => $model,
-                'temperature' => $temperature,
-                'text_length' => strlen($text)
-            ]);
 
             $ch = curl_init();
             curl_setopt($ch, CURLOPT_URL, $url);
@@ -57,107 +44,28 @@ class PerplexityService
             curl_setopt($ch, CURLOPT_POST, 1);
             curl_setopt($ch, CURLOPT_POSTFIELDS, $data_string);
             curl_setopt($ch, CURLOPT_RETURNTRANSFER, true);
-            
-            // Timeout dinámico según el modelo
-            // sonar-deep-research necesita más tiempo porque hace investigación exhaustiva
-            $timeout = ($model === 'sonar-deep-research') ? 900 : 300; // 15 min para deep-research, 5 min para otros
-            curl_setopt($ch, CURLOPT_TIMEOUT, $timeout);
-            
-            Log::info('PerplexityService::ChatCompletions - Timeout configurado', [
-                'timeout_seconds' => $timeout,
-                'timeout_minutes' => round($timeout / 60, 1)
-            ]);
 
             $response = curl_exec($ch);
-            $http_code = curl_getinfo($ch, CURLINFO_HTTP_CODE);
-            $curl_error = curl_error($ch);
-            curl_close($ch);
-            
-            // Log: Response básico
-            Log::info('PerplexityService::ChatCompletions - Respuesta recibida', [
-                'http_code' => $http_code,
-                'curl_error' => $curl_error ? $curl_error : 'Sin errores',
-                'response_length' => strlen($response)
-            ]);
-            
-            // Verificar errores de cURL
-            if ($curl_error) {
-                Log::error('PerplexityService::ChatCompletions - Error de cURL', [
-                    'error' => $curl_error
-                ]);
-                return ['error' => 'Error de conexión: ' . $curl_error];
-            }
-            
-            // Verificar si la respuesta está vacía
-            if (empty($response)) {
-                Log::error('PerplexityService::ChatCompletions - Respuesta vacía', [
-                    'http_code' => $http_code
-                ]);
-                return ['error' => 'La API devolvió una respuesta vacía'];
-            }
 
             $response_data = json_decode($response, true);
-            
-            // Verificar si el JSON es válido
-            if (json_last_error() !== JSON_ERROR_NONE) {
-                Log::error('PerplexityService::ChatCompletions - Error al decodificar JSON', [
-                    'json_error' => json_last_error_msg(),
-                    'response_preview' => substr($response, 0, 500)
-                ]);
-                return ['error' => 'Error al decodificar la respuesta de la API'];
-            }
-            
-            // Log: Response data completo
-            Log::info('PerplexityService::ChatCompletions - Respuesta decodificada', [
-                'has_choices' => isset($response_data['choices']),
-                'has_error' => isset($response_data['error']),
-                'http_code' => $http_code
-            ]);
-            
-            // Manejar códigos HTTP de error
-            if ($http_code >= 400) {
-                $error_msg = 'Error HTTP ' . $http_code;
-                if (isset($response_data['error']['message'])) {
-                    $error_msg .= ': ' . $response_data['error']['message'];
-                } elseif (isset($response_data['error'])) {
-                    $error_msg .= ': ' . json_encode($response_data['error']);
+            curl_close($ch);
+            if(!isset($response_data['error'])){
+                if (isset($response_data['choices'])) {
+                    $choices = $response_data['choices'][0]['message']['content'];
+                    $citations = $response_data['citations'];
+                    // return $choices;
+                    return array('data' => $choices, 'citations' => $citations);
+                }else{
+                    return array('error' => $response_data);
+                    // throw new HttpException(400, $response_data);
                 }
-                
-                Log::error('PerplexityService::ChatCompletions - Error HTTP', [
-                    'http_code' => $http_code,
-                    'error' => $error_msg,
-                    'response_data' => $response_data
-                ]);
-                
-                return ['error' => $error_msg];
+            }else{
+                return array('error' => $response_data['error']['message']);
+                // throw new HttpException(400, $response_data['error']['message']);
             }
-            
-            // Verificar estructura de respuesta exitosa
-            if (isset($response_data['choices'][0]['message']['content'])) {
-                $choices = $response_data['choices'][0]['message']['content'];
-                $citations = $response_data['citations'] ?? [];
-                
-                Log::info('PerplexityService::ChatCompletions - Éxito', [
-                    'content_length' => strlen($choices),
-                    'citations_count' => count($citations)
-                ]);
-                
-                return array('data' => $choices, 'citations' => $citations);
-            } else {
-                // Respuesta inesperada sin error pero sin data
-                Log::error('PerplexityService::ChatCompletions - Estructura inesperada', [
-                    'response_data' => $response_data,
-                    'http_code' => $http_code
-                ]);
-                return array('error' => 'Estructura de respuesta inesperada de la API. Por favor, intenta nuevamente.');
-            }
-            
         }catch (\Exception $e) {
-            Log::error('PerplexityService::ChatCompletions - Excepción', [
-                'exception' => $e->getMessage(),
-                'trace' => $e->getTraceAsString()
-            ]);
-            return array('error' => 'Error inesperado: ' . $e->getMessage());
+            return array('error' => $e->getMessage());
+            // throw new HttpException(400, $e->getMessage());
         }
     }
     public static function ChatCompletionsChat($text, $model="sonar-reasoning", $temperature=1)
@@ -264,5 +172,121 @@ class PerplexityService
             return ['error' => $e->getMessage()];
         }
     }
-    
+
+    public static function ChatCompletionsAsync($text, $model="sonar", $temperature=1.0, $system_prompt = null)
+    {
+        // return ['success' => true, 'data' => ["id"=>"e2a4c46c-69c3-4353-bebb-b4a82cbfd7ec"]];
+        try {
+            $url = "https://api.perplexity.ai/async/chat/completions";
+
+            $prompt = [];
+
+            // Agregar el prompt del sistema si existe
+            if (!empty($system_prompt)) {
+                $prompt[] = [
+                    "role" => "system",
+                    "content" => $system_prompt
+                ];
+            }
+
+            // Agregar el mensaje del usuario
+            $prompt[] = [
+                "role" => "user",
+                "content" => $text
+            ];
+
+            $data = [
+                'request' => [
+                    'model' => $model,
+                    'messages' => $prompt,
+                    'temperature' => $temperature
+                ]
+            ];
+
+            $data_string = json_encode($data);
+
+            $ch = curl_init();
+            curl_setopt($ch, CURLOPT_URL, $url);
+            curl_setopt($ch, CURLOPT_HTTPHEADER, array(
+                'Content-Type: application/json',
+                'Authorization: Bearer '.env('PERPLEXITY_API_KEY')
+            ));
+            curl_setopt($ch, CURLOPT_POST, 1);
+            curl_setopt($ch, CURLOPT_POSTFIELDS, $data_string);
+            curl_setopt($ch, CURLOPT_RETURNTRANSFER, true);
+
+            $response = curl_exec($ch);
+
+            $response_data = json_decode($response, true);
+
+            curl_close($ch);
+            if(!isset($response_data['error'])){
+                 //verificar si existe un id en la respuesta
+                if(isset($response_data['id'])){
+                    return ['success' => true, 'data' => $response_data];
+                }else{
+                    return ['success' => false, 'error' => $response_data];
+                    // throw new HttpException(400, $response_data);
+                }
+            }else{
+                return ['success' => false, 'error' => $response_data['error']['message']];
+                // throw new HttpException(400, $response_data['error']['message']);
+            }
+        }catch (\Exception $e) {
+            return ['success' => false, 'error' => $e->getMessage()];
+            // throw new HttpException(400, $e->getMessage());
+        }
+    }
+
+    /* 
+    curl --location 'https://api.perplexity.ai/async/chat/completions/{REPLACE_WITH_REQUEST_ID}' \
+  --header "Authorization: Bearer <token>"
+    */
+    public static function ChatCompletionsAsyncGet($requestId)
+    {
+        try {
+            $url = "https://api.perplexity.ai/async/chat/completions/$requestId";
+
+            $ch = curl_init();
+            curl_setopt($ch, CURLOPT_URL, $url);
+            curl_setopt($ch, CURLOPT_HTTPHEADER, [
+                'Content-Type: application/json',
+                'Authorization: Bearer ' . env('PERPLEXITY_API_KEY')
+            ]);
+            // En cURL, una petición GET es el valor por defecto, así que no es necesario establecer CURLOPT_CUSTOMREQUEST ni CURLOPT_HTTPGET explícitamente.
+            curl_setopt($ch, CURLOPT_RETURNTRANSFER, true);
+
+            $response = curl_exec($ch);
+            $http_code = curl_getinfo($ch, CURLINFO_HTTP_CODE);
+            curl_close($ch);
+
+            if ($http_code >= 200 && $http_code < 300) {
+                $response_data = json_decode($response, true);
+
+                if (!isset($response_data['error'])) {
+                    return ['success' => true, 'data' => $response_data];
+                } else {
+                    Log::error('Error en respuesta de Perplexity', [
+                        'error' => $response_data['error']
+                    ]);
+                    return ['success' => false, 'error' => $response_data['error']['message']];
+                }
+            } else {
+                Log::error('Error HTTP en ChatCompletionsAsyncGet', [
+                    'http_code' => $http_code,
+                    'response' => $response
+                ]);
+
+                $response_data = json_decode($response, true);
+                return ['success' => false, 'error' => $response_data['error']['message'] ?? "Error HTTP: $http_code"];
+            }
+
+        } catch (\Exception $e) {
+            Log::error('Excepción en ChatCompletionsAsyncGet', [
+                'error' => $e->getMessage(),
+                'trace' => $e->getTraceAsString()
+            ]);
+            return ['success' => false, 'error' => $e->getMessage()];
+        }
+    }
 }

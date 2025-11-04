@@ -7,6 +7,7 @@ use App\Http\Controllers\AsistenteGraficaController;
 use App\Http\Controllers\AsistenteInnovacionController;
 use App\Http\Controllers\AsistenteSocialMediaController;
 use App\Http\Controllers\BrandController;
+use App\Http\Controllers\ChatController;
 use App\Http\Controllers\ConfigController;
 use App\Http\Controllers\DashboardController;
 use App\Http\Controllers\FileController;
@@ -23,7 +24,10 @@ use App\Http\Controllers\RoleController;
 use App\Http\Controllers\SiteController;
 use App\Http\Controllers\SubscriptionController;
 use App\Http\Controllers\UserController;
+use App\Http\Controllers\ValidarConceptoController;
+use App\Livewire\Generador\GeneradorMain;
 use Illuminate\Support\Facades\Route;
+
 
 
 
@@ -67,6 +71,14 @@ Route::middleware(['auth','subscription'])->group(function () {
         return view('asistentes');
     })->name('asistentes');
 
+    Route::get('/creatividad', function () {
+        return view('creatividad');
+    })->name('creatividad');
+
+    Route::get('/video-editor', function () {
+        return view('video-editor');
+    })->name('video-editor');
+
     Route::get('/profile', [ProfileController::class, 'edit'])->name('profile.edit');
     Route::patch('/profile', [ProfileController::class, 'update'])->name('profile.update');
     Route::delete('/profile', [ProfileController::class, 'destroy'])->name('profile.destroy');
@@ -106,6 +118,7 @@ Route::middleware(['auth','subscription'])->group(function () {
 
     Route::resource('generated', GeneratedController::class)->except(['show']);
     Route::get('generated/{generated}/download', [GeneratedController::class, 'download'])->name('generated.download');
+    Route::get('generated/{generated}/continue', [GeneratedController::class, 'continue'])->name('generated.continue');
 
     Route::resource('demo', FileController::class)->except(['show']);
     Route::post('/upload', [FileController::class, 'upload'])->name('upload');
@@ -126,11 +139,25 @@ Route::middleware(['auth','subscription'])->group(function () {
     Route::post('/herramienta2/regenerateGenesis', [Herramienta2Controller::class, 'regenerateGenesis'])->name('herramienta2.regenerateGenesis');
     Route::post('/herramienta2/construccionescenario', [Herramienta2Controller::class, 'construccionescenario'])->name('herramienta2.construccionescenario');
     Route::post('/herramienta2/regenerarConstruccionEscenario', [Herramienta2Controller::class, 'regenerarConstruccionEscenario'])->name('herramienta2.regenerarConstruccionEscenario');
-    Route::post('/herramienta2/eleccioncampania', [Herramienta2Controller::class, 'eleccioncampania'])->name('herramienta2.eleccioncampania');
-    Route::post('/herramienta2/saveeleccioncampania', [Herramienta2Controller::class, 'saveeleccioncampania'])->name('herramienta2.saveeleccioncampania');
+    Route::post('/herramienta2/saveconstruccionescenario', [Herramienta2Controller::class, 'saveconstruccionescenario'])->name('herramienta2.saveconstruccionescenario');
+    Route::post('/herramienta2/validarconcepto', [Herramienta2Controller::class, 'validarconcepto'])->name('herramienta2.validarconcepto');
+    Route::get('/herramienta2/get_concepto/{generationId}', [Herramienta2Controller::class, 'get_concepto'])->name('herramienta2.get_concepto');
+
+    Route::post('/herramienta2/setGenerarCreatividad', [Herramienta2Controller::class, 'setGenerarCreatividad'])->name('herramienta2.setGenerarCreatividad');
+    Route::get('/herramienta2/get_construccion_creatividad/{generationId}', [Herramienta2Controller::class, 'get_construccion_creatividad'])->name('herramienta2.get_construccion_creatividad');
+    Route::post('/herramienta2/setGenerarIdeasContenido', [Herramienta2Controller::class, 'setGenerarIdeasContenido'])->name('herramienta2.setGenerarIdeasContenido');
+    Route::post('/herramienta2/setGenerarEstrategia', [Herramienta2Controller::class, 'setGenerarEstrategia'])->name('herramienta2.setGenerarEstrategia');
+    Route::get('/herramienta2/get_construccion_estrategia/{generationId}', [Herramienta2Controller::class, 'get_construccion_estrategia'])->name('herramienta2.get_construccion_estrategia');
+    Route::get('/herramienta2/get_construccion_ideas_contenido/{generationId}', [Herramienta2Controller::class, 'get_construccion_ideasContenido'])->name('herramienta2.get_construccion_ideas_contenido');
+    Route::post('/herramienta2/saveGenerarIdeasContenido', [Herramienta2Controller::class, 'saveGenerarIdeasContenido'])->name('herramienta2.saveGenerarIdeasContenido');
+
     Route::post('/herramienta2/saveEstrategiaCreatividadInnovacion', [Herramienta2Controller::class, 'saveEstrategiaCreatividadInnovacion'])->name('herramienta2.saveEstrategiaCreatividadInnovacion');
     Route::get('/herramienta2/download', [Herramienta2Controller::class, 'download'])->name('herramienta2.download');
     Route::post('/herramienta2/generateNewCreatividadEstrategiaInnovacion', [Herramienta2Controller::class, 'generateNewCreatividadEstrategiaInnovacion'])->name('herramienta2.generateNewCreatividadEstrategiaInnovacion');
+    Route::post('/herramienta2/saveValidarConcepto', [Herramienta2Controller::class, 'saveValidarConcepto'])->name('herramienta2.saveValidarConcepto');
+    Route::post('/herramienta2/mejorarConcepto', [Herramienta2Controller::class, 'mejorarConcepto'])->name('herramienta2.mejorarConcepto');
+    Route::get('/herramienta2/get_concepto_mejorado/{generationId}', [Herramienta2Controller::class, 'get_concepto_mejorado'])->name('herramienta2.get_concepto_mejorado');
+    Route::post('/herramienta2/saveconstruccionescenariomejorado', [Herramienta2Controller::class, 'saveconstruccionescenariomejorado'])->name('herramienta2.saveconstruccionescenariomejorado');
     Route::post('/generar-insight', [Herramienta2Controller::class, 'GenerarInsight'])->name('generar.insight');
 
     
@@ -157,17 +184,31 @@ Route::middleware(['auth','subscription'])->group(function () {
     Route::post('/asistente-innovacion/generarPrompt', [AsistenteInnovacionController::class, 'generarPrompt'])->name('asistenteInnovacion.generarPrompt');
     Route::post('/asistente-innovacion/download', [AsistenteInnovacionController::class, 'download'])->name('asistente-innovacion.download');
 
+    Route::get('/validar-concepto', [ValidarConceptoController::class, 'index'])->name('validar-concepto.index');
+    Route::post('/validar-concepto/getValidarConceptoForm', [ValidarConceptoController::class, 'getValidarConceptoForm'])->name('validar-concepto.getValidarConceptoForm');
+    Route::get('/validar-concepto/get_concepto/{id}', [ValidarConceptoController::class, 'get_concepto'])->name('validar-concepto.get_concepto');
+    Route::post('/validar-concepto/saveValidarConcepto', [ValidarConceptoController::class, 'saveValidarConcepto'])->name('validar-concepto.saveValidarConcepto');
+    Route::post('/validar-concepto/getValidarConceptoGenesis', [ValidarConceptoController::class, 'getValidarConceptoGenesis'])->name('validar-concepto.getValidarConceptoGenesis');
+    Route::post('/validar-concepto/mejorarConcepto', [ValidarConceptoController::class, 'mejorarConcepto'])->name('validar-concepto.mejorarConcepto');
+    Route::get('/validar-concepto/{generated}/download', [ValidarConceptoController::class, 'download'])->name('validar-concepto.download');
+
     Route::post('/process-file', [FileProcessingController::class, 'processFile'])->name('process.file');
 
     Route::post('/getGeneratedBrief', [GeneratedController::class, 'getGeneratedBrief'])->name('getGeneratedBrief');
+    Route::post('v2/getGeneratedBrief', [GeneratedController::class, 'getGeneratedBriefV2'])->name('getGeneratedBriefV2');
     Route::post('/getGeneratedGenesis', [GeneratedController::class, 'getGeneratedGenesis'])->name('getGeneratedGenesis');
+    Route::post('v2/getGeneratedGenesis', [GeneratedController::class, 'getGeneratedGenesisV2'])->name('getGeneratedGenesisV2');
+    Route::post('/getGeneratedInvestigation', [GeneratedController::class, 'getGeneratedInvestigation'])->name('getGeneratedInvestigation');
 
     Route::resource('plans', PlanController::class);
     Route::get('/chatimage', [PlanController::class, 'mostrarChatimage'])->name('chatimage');
 
     Route::get('/asistente-generador', [NewGeneradorController::class, 'index'])->name('asistenteGenerador.index');
-    Route::get('/generar-videos', [NewGeneradorController::class, 'videos'])->name('generar-videos');
+   // Route::get('/generar-videos', [NewGeneradorController::class, 'videos'])->name('generar-videos');
     Route::resource('planServiceLimits', PlanServiceLimitsController::class);
+
+    // Página del nuevo contenedor de herramientas (Livewire 3)
+    Route::get('/generador/{tool?}', GeneradorMain::class)->name('generador.main');
 });
 
 Route::get('subscribe', [SubscriptionController::class, 'show'])->name('subscription.show');
@@ -177,6 +218,8 @@ Route::get('subscribe', [SubscriptionController::class, 'show'])->name('subscrip
 Route::get('/dashboard/herramienta1', [DashboardController::class, 'indexHerramienta1'])->name('dashboard.herramienta1');
 Route::resource('investigacion', InvestigacionController::class);
 Route::post('/investigaciongenerada',[InvestigacionController::class,'generarInvestigacion'])->name('investigacion.generarInvestigacion');
+Route::get('/investigacion/estado/{generationId}', [InvestigacionController::class, 'consultarEstadoGeneracion'])->name('investigacion.estado');
+Route::get('/investigacion/ejecutar/{generationId}', [InvestigacionController::class, 'ejecutarGeneracion'])->name('investigacion.ejecutar');
 Route::get('investigacion/{generated}/download', [InvestigacionController::class, 'download'])->name('investigacion.download');
 
 // Ruta para descargar la última investigación de una cuenta
@@ -188,7 +231,8 @@ Route::get('/suscripcion/finalizada', [SubscriptionController::class, 'mensajeSu
 
 Route::post('/api/search-perplexity-web', [App\Http\Controllers\API\PerplexityController::class, 'search'])
     ->name('api.search-perplexity-web');
-
+// Ruta del chat
+Route::get('/chat', [ChatController::class, 'index'])->name('chat.index');
     
 
 require __DIR__.'/auth.php';

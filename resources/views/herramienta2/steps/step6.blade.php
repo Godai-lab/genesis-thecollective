@@ -1,80 +1,77 @@
-<style>
-
-#visual-lista-fuentes-genesis ul,
-#visual-lista-fuentes-escenario ul {
-    list-style-type: disc !important;
-    padding-left: 40px !important;
-    margin-top: 5px;
-    font-size: 14px;
-}
-
-
-</style>
+@php
+$lanzamiento = [
+    ["id"=> "Nuevo al mercado", "name"=> "Nuevo al mercado"],
+    ["id"=> "Extensión de línea", "name"=> "Extensión de línea"],
+];
+$posicionamiento = [
+    ["id"=> "Construcción de marca", "name"=> "Construcción de marca"],
+    ["id"=> "Cambio de imagen", "name"=> "Cambio de imagen"],
+];
+$mantenimiento = [
+    ["id"=> "Recordación de marca", "name"=> "Recordación de marca"],
+    ["id"=> "Fidelización", "name"=> "Fidelización"],
+];
+$promociones = [
+    ["id"=> "Descuentos y ofertas", "name"=> "Descuentos y ofertas"],
+    ["id"=> "Temporada", "name"=> "Temporada"],
+    ["id"=> "Liquidación", "name"=> "Liquidación"],
+    ["id"=> "Vinculada a eventos", "name"=> "Vinculada a eventos"],
+    ["id"=> "Vinculada a temporadas", "name"=> "Vinculada a temporadas"],
+]
+@endphp
 <!-- step6.blade.php -->
 <div id="step-6-form">
     <div id="step-6-form-content">
-        <form id="step-6-form" method="POST" action="{{route('herramienta2.saveEstrategiaCreatividadInnovacion')}}" data-validate="true">
+        <form id="step6Form" method="POST" action="{{route('herramienta2.setGenerarCreatividad')}}" data-validate="true">
             @csrf
-            <h2 class="text-base font-semibold leading-7 text-black dark:text-gray-100">RESULTADO GÉNESIS</h2>
-            <h3 class="text-base font-semibold leading-7 text-black dark:text-gray-100">ESTRATEGIA</h3>
-            <div id="editor-container-genesis"></div>
-        
-            {{-- <h4 class="text-base font-semibold leading-7 text-black dark:text-gray-100">FUENTE GÉNESIS</h4> --}}
-            <div id="visual-lista-fuentes-genesis" class="mt-2 list-disc pl-5"></div>
-            <br>
-            <h3 class="text-base font-semibold leading-7 text-black dark:text-gray-100">CREATIVIDAD</h3>
-            <div id="editor-container-escenario" ></div>
-            {{-- <h4 class="text-base font-semibold leading-7 text-black dark:text-gray-100">FUENTE ESCENARIO</h4> --}}
-            <div id="visual-lista-fuentes-escenario"  class="mt-2 list-disc pl-5"></div>
-            <br>
-            <h2 class="text-base font-semibold leading-7 text-black dark:text-gray-100">BAJADAS CREATIVAS</h2>
-            <input type="hidden" name="construccionCreatividad" id="construccionCreatividad"> 
-            <div class="mb-2" id="editor-container-construccionCreatividad"></div>
-            <x-button-genesis type="button" data-type="Creatividad" class="generarNewCEI mt-3 mb-6">Volver a generar</x-button-genesis>
-
-            <h2 class="text-base font-semibold leading-7 text-black dark:text-gray-100">ESTRATEGIA DIGITAL</h2>
-            <input type="hidden" name="construccionEstrategia" id="construccionEstrategia"> 
-            <div class="mb-2" id="editor-container-construccionEstrategia"></div>
-            <x-button-genesis type="button" data-type="Estrategia" class="generarNewCEI mt-3 mb-6">Volver a generar</x-button-genesis>
-
-            <h2 class="text-base font-semibold leading-7 text-black dark:text-gray-100">IDEAS DE CONTENIDO</h2>
-            <input type="hidden" name="construccionIdeasContenido" id="construccionIdeasContenido"> 
-            <div class="mb-2" id="editor-container-construccionIdeasContenido"></div>
-            <x-button-genesis type="button" data-type="Contenido" class="generarNewCEI mt-3 mb-6">Volver a generar</x-button-genesis>
-            
-            <!-- <h2 class="text-base font-semibold leading-7 text-black dark:text-gray-100">INNOVACIONES</h2>
-            <input type="hidden" name="construccionInnovacion" id="construccionInnovacion"> 
-            <div class="mb-2" id="editor-container-construccionInnovacion"></div> 
-            <x-button-genesis type="button" data-type="Innovacion" class="generarNewCEI mt-3 mb-6">Volver a generar</x-button-genesis>-->
-
-            <x-dynamic-form 
-                :fields="[
-
-                    ['label'=>'Nombre del archivo','placeholder'=>'Escribe el nombre del archivo','type'=>'text', 'name'=>'file_name', 'id'=>'file_name', 'col'=>'sm:col-span-3', 'value'=>old('file_name'), 'attr'=>'data-validation-rules=required|max:100 data-field-name=nombre_archivo'],
-
-                    ]"
-                >
-                <h2 class="text-base font-semibold leading-7 text-black dark:text-gray-100">Guardar archivo</h2>
-                <p class="mt-1 text-sm leading-6 text-black dark:text-gray-400">aquí puedes guardar tu archivo</p>
-            </x-dynamic-form>
-
-            <div class="mt-4">
-                <div>
-                    <label for="rating" class="block text-sm font-medium text-gray-700 dark:text-gray-300">Valoración</label>
-                    <div class="rating mt-1" id="rating">
-                        @for ($i = 1; $i <= 5; $i++)
-                            <i class="fas fa-star text-2xl cursor-pointer" data-rating="{{ $i }}"></i>
-                        @endfor
+            <div class="space-y-12">
+                <div class="border-b border-gray-700 pb-12 mb-6">
+                    <h2 class="text-base font-semibold leading-7 text-black dark:text-gray-100">Elección de campaña</h2>
+                    <p class="mt-1 text-sm leading-6 text-black dark:text-gray-400"></p>
+                    <div class="mt-10 grid grid-cols-1 gap-x-6 gap-y-8 sm:grid-cols-6 items-start">
+                        <div class="sm:col-span-4">
+                            <label for="360_lanzamiento" class="block text-sm font-medium leading-6 text-black dark:text-gray-100">Tipo de campaña</label>
+                            <div class="mt-2">
+                                <select name="360_Tipo_de_campaña" id="360_Tipo_de_campaña" validate-required="required" validate-name="lanzamiento_de_producto/servicio" class="block w-full rounded-md border-1 py-1.5 text-black dark:text-gray-100 shadow-sm ring-1 ring-inset ring-gray-600 placeholder:text-gray-400 focus:ring-2 focus:ring-inset focus:ring-black dark:focus:ring-indigo-600 sm:text-sm sm:leading-6 bg-transparent dark:bg-gray-700">
+                                    <optgroup label="Lanzamiento de producto/servicio">
+                                        <option value="Nuevo al mercado">Nuevo al mercado</option>
+                                        <option value="Extensión de línea">Extensión de línea</option>
+                                    </optgroup>
+                                    <optgroup label="Posicionamiento/Branding">
+                                        <option value="Construcción de marca">Construcción de marca</option>
+                                        <option value="Cambio de imagen">Cambio de imagen</option>
+                                    </optgroup>
+                                    <optgroup label="Mantenimiento">
+                                        <option value="Recordación de marca">Recordación de marca</option>
+                                        <option value="Fidelización">Fidelización</option>
+                                    </optgroup>
+                                    <optgroup label="Promociones">
+                                        <option value="Descuentos y ofertas">Descuentos y ofertas</option>
+                                        <option value="Temporada">Temporada</option>
+                                        <option value="Liquidación">Liquidación</option>
+                                        <option value="Vinculada a eventos">Vinculada a eventos</option>
+                                        <option value="Vinculada a temporadas">Vinculada a temporadas</option>
+                                    </optgroup>
+                                </select>
+                            </div>
+                        </div>
                     </div>
-                    <input type="hidden" name="rating" id="rating-value" data-validation-rules="required" data-field-name="valoración">
                 </div>
             </div>
-            
+            {{-- <x-dynamic-form 
+                :fields="[
+                    ['label'=>'Lanzamiento de producto/servicio','type'=>'select', 'name'=>'360_lanzamiento', 'id'=>'360_lanzamiento', 'col'=>'sm:col-span-4', 'value'=>old('360_lanzamiento'), 'attr'=>'validate-required=required validate-name=lanzamiento_de_producto/servicio', 'list'=>$lanzamiento, 'description'=>'Lanzamiento de producto/servicio'],
+                    ['label'=>'Posicionamiento/Branding','type'=>'select', 'name'=>'360_posicionamiento', 'id'=>'360_posicionamiento', 'col'=>'sm:col-span-4', 'value'=>old('360_posicionamiento'), 'attr'=>'validate-required=required validate-name=posicionamiento/Branding', 'list'=>$posicionamiento, 'description'=>'Posicionamiento/Branding'],
+                    ['label'=>'Mantenimiento','type'=>'select', 'name'=>'360_mantenimiento', 'id'=>'360_mantenimiento', 'col'=>'sm:col-span-4', 'value'=>old('360_mantenimiento'), 'attr'=>'validate-required=required validate-name=mantenimiento', 'list'=>$mantenimiento, 'description'=>'Mantenimiento'],
+                    ['label'=>'Promociones','type'=>'select', 'name'=>'360_promociones', 'id'=>'360_promociones', 'col'=>'sm:col-span-4', 'value'=>old('360_promociones'), 'attr'=>'validate-required=required validate-name=promociones', 'list'=>$promociones, 'description'=>'Promociones'],
+                ]"
+                >
+                <h2 class="text-base font-semibold leading-7 text-black dark:text-gray-100">Elección de campaña</h2>
+                <p class="mt-1 text-sm leading-6 text-black dark:text-gray-400"></p>
+            </x-dynamic-form> --}}
             <div class="mt-6 flex items-center flex-wrap justify-end gap-x-6 gap-y-2">
                 <x-button-genesis type="button" data-step="5" class="step-button">Regresar</x-button-genesis>
-                <x-button-genesis type="button" data-form="btnsaveeleccioncampania" class="form-button-step">Volver a generar</x-button-genesis>
-                <x-button-genesis type="button" class="form-button-save">Guardar</x-button-genesis>
-                
+                <x-button-genesis type="button" id="btnGenerarConstruccionCreatividad" data-btnForm="btnGenerarConstruccionCreatividad" class="">Aceptar</x-button-genesis>
             </div>
         </form>
     </div>

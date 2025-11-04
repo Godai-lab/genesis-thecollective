@@ -7,7 +7,7 @@
     </x-slot>
 
     <div class="py-12">
-        <div class="max-w-7xl mx-auto sm:px-6 lg:px-8">
+        <div class="max-w-6xl mx-auto sm:px-6 lg:px-8">
             <div class="bg-white dark:bg-gray-800 overflow-hidden">
                 <div class="p-6 text-black dark:text-gray-100">
                     <div class="block p-3"></div>
@@ -119,9 +119,25 @@
                         var form = event.target.form;
 
                         if (ValidarCampos(form)) {
-                            mostrarLoader();
+                            // Solo mostrar loader si es el formulario de generación (generarPrompt)
+                            const esFormularioGeneracion = form.action.includes('generarPrompt');
+                            if (esFormularioGeneracion) {
+                                mostrarLoader();
+                            }
                             contenedor.style.display = 'none';
                             var formData = new FormData(form);
+                            
+                            // Capturar categorías seleccionadas de los badges
+                            if (form.id === 'step-2-form') {
+                                const selectedTags = document.querySelectorAll('.category-tag.selected');
+                                selectedTags.forEach(tag => {
+                                    const categoryId = tag.getAttribute('data-category');
+                                    formData.append('categories[]', categoryId);
+                                });
+                                
+                                console.log('Categorías seleccionadas:', Array.from(formData.getAll('categories[]')));
+                            }
+                            
                             if (form.id !== 'accountForm') {
                                 if (accountID !== null && !isNaN(accountID)) {
                                     // Agregar el valor de accountID a formData
@@ -135,7 +151,9 @@
                                     }
                                 }).then(response => response.json())
                                 .then(data => {
-                                    ocultarLoader();
+                                    if (esFormularioGeneracion) {
+                                        ocultarLoader();
+                                    }
                                     console.log(data);
                                     if(!data.error){
                                         if(data.function) {
@@ -169,7 +187,9 @@
                                     }
                                 }).catch(error => {
                                     // document.querySelector('.loader').style.display = 'none';
-                                    ocultarLoader();
+                                    if (esFormularioGeneracion) {
+                                        ocultarLoader();
+                                    }
                                     contenedor.style.display = 'block';
                                 });
                                 
@@ -180,7 +200,9 @@
                                 recargarGenesis(accountID);
                                 goToStep(step);
                                 // document.querySelector('.loader').style.display = 'none';
-                                ocultarLoader();
+                                if (esFormularioGeneracion) {
+                                    ocultarLoader();
+                                }
                             }
                         };
                     });
@@ -241,9 +263,6 @@
                         return;
                     }
                     
-                    // Mostrar el loader mientras se procesa
-                    mostrarLoader();
-                    
                     // Crear manualmente los datos del formulario
                     var formData = new FormData();
                     formData.append('_token', document.querySelector('meta[name="csrf-token"]').getAttribute('content'));
@@ -260,7 +279,6 @@
                         }
                     }).then(response => response.json())
                     .then(data => {
-                        ocultarLoader();
                         if (data.success) {
                             // Ocultar el paso actual
                             document.querySelector('.step-3').style.display = 'none';
@@ -270,7 +288,6 @@
                             alert(data.error || 'Ocurrió un error al guardar los datos');
                         }
                     }).catch(error => {
-                        ocultarLoader();
                         console.error('Error:', error);
                         alert('Error al procesar la solicitud');
                     });
@@ -283,7 +300,7 @@
         });
 
         function recargarBrief(accountID){
-            let url = "{{ route('getGeneratedBrief') }}";
+            let url = "{{ route('getGeneratedBriefV2') }}";
             let formData = new FormData();
             formData.append('accountID', accountID);
             fetch(url, {
@@ -310,7 +327,7 @@
         }
 
         function recargarGenesis(accountID){
-            let url = "{{ route('getGeneratedGenesis') }}";
+            let url = "{{ route('getGeneratedGenesisV2') }}";
             let formData = new FormData();
             formData.append('accountID', accountID);
             fetch(url, {
@@ -343,41 +360,121 @@
         const mensajes = [
             "Cargando...",
             "Procesando...",
+            "Analizando tu Brief o Génesis...",
+            "Generando propuestas creativas...",
             "Esto puede demorar un poco...",
+            "Dando los últimos toques de creatividad...",
             "La IA está trabajando para ti..."
         ];
 
         let mensajeIndex = 0;
         let mensajeInterval;
+        let duracionMensaje = 10000;
+        let procesando = false;
+        let progressBar;
+        let progressText;
+        let progressContainer;
+
+        function actualizarProgreso(porcentaje) {
+            progressBar.style.width = `${porcentaje}%`;
+            progressText.textContent = `${Math.round(porcentaje)}%`;
+        }
 
         function mostrarLoader() {
+            procesando = true;
             const loader = document.getElementById('loader');
-            loader.style.display = 'block'; // Mostrar el loader
+            progressBar = document.getElementById('progress-bar');
+            progressText = document.getElementById('progress-text');
+            progressContainer = document.getElementById('progress-container');
+            
+            loader.style.display = 'block';
+            progressContainer.style.display = 'block';
+            
+            // Reiniciar progreso
+            actualizarProgreso(0);
+            
+            // Mostrar el primer mensaje inmediatamente
+            mostrarMensajeConEfecto(loader, mensajes[0]);
+            mensajeIndex = 1;
+            
+            // Calcular el progreso por mensaje
+            const progresoPorMensaje = 100 / mensajes.length;
 
-            mensajeInterval = setInterval(() => {
-                // Añadir clase para hacer fade out
-                loader.classList.add('fade-out');
+            function mostrarSiguienteMensaje() {
+                if (!procesando) return;
 
-                // Esperar a que el fade out termine
-                setTimeout(() => {
-                    loader.textContent = mensajes[mensajeIndex];
+                if (mensajeIndex < mensajes.length - 1) {
+                    mostrarMensajeConEfecto(loader, mensajes[mensajeIndex]);
+                    actualizarProgreso(progresoPorMensaje * (mensajeIndex + 1));
                     mensajeIndex++;
+                    setTimeout(mostrarSiguienteMensaje, duracionMensaje);
+                } else if (mensajeIndex === mensajes.length - 1) {
+                    mostrarMensajeConEfecto(loader, mensajes[mensajeIndex]);
+                    actualizarProgreso(95); // Dejamos el último 5% para cuando termine el proceso
+                }
+            }
 
-                    // Si llegamos al final de los mensajes, reiniciamos
-                    if (mensajeIndex >= mensajes.length) {
-                        mensajeIndex = 0;
-                    }
+            setTimeout(mostrarSiguienteMensaje, duracionMensaje);
+        }
 
-                    // Quitar clase fade-out para hacer fade in
-                    loader.classList.remove('fade-out');
-                }, 500); // Tiempo del fade out, debe coincidir con la duración en el CSS
-            }, 2500); // Tiempo entre mensajes
+        function mostrarMensajeConEfecto(loader, mensaje) {
+            loader.classList.add('fade-out');
+            
+            setTimeout(() => {
+                loader.textContent = mensaje;
+                loader.classList.remove('fade-out');
+            }, 500);
         }
 
         function ocultarLoader() {
-            clearInterval(mensajeInterval); // Detener el cambio de mensajes
+            procesando = false;
             const loader = document.getElementById('loader');
-            loader.style.display = 'none'; // Ocultar el loader
+            
+            // Completar la barra de progreso antes de ocultar
+            actualizarProgreso(100);
+            
+            setTimeout(() => {
+                loader.classList.add('fade-out');
+                progressContainer.classList.add('fade-out');
+                
+                setTimeout(() => {
+                    loader.style.display = 'none';
+                    progressContainer.style.display = 'none';
+                    loader.classList.remove('fade-out');
+                    progressContainer.classList.remove('fade-out');
+                    mensajeIndex = 0;
+                }, 500);
+            }, 500);
         }
+
+        // Primero agregamos el HTML para la barra de progreso justo antes del loader
+        const loaderDiv = document.getElementById('loader');
+        loaderDiv.insertAdjacentHTML('beforebegin', `
+            <div id="progress-container" style="display: none;" class="w-full max-w-md mx-auto mb-4">
+                <div class="w-full bg-gray-200 rounded-full h-2.5 dark:bg-gray-700 overflow-hidden">
+                    <div id="progress-bar" 
+                        class="bg-blue-600 h-2.5 rounded-full transition-all duration-500 ease-out"
+                        style="width: 0%">
+                    </div>
+                </div>
+                <div style="font-size:30px !important;"" id="progress-text" class="text-center text-sm mt-2 text-gray-600 dark:text-gray-300 font-bold">0%</div>
+            </div>
+        `);
+
+        // Agregamos los estilos necesarios
+        const style = document.createElement('style');
+        style.textContent = `
+            #loader, #progress-container {
+                opacity: 1;
+                transition: opacity 0.5s ease-in-out;
+            }
+            #loader.fade-out, #progress-container.fade-out {
+                opacity: 0;
+            }
+            #progress-bar {
+                transition: width 0.5s ease-out;
+            }
+        `;
+        document.head.appendChild(style);
     </script>
 </x-app-layout>

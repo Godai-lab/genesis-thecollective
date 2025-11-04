@@ -13,7 +13,8 @@
                     <div class="block p-3"></div>
                     
                     <div id="Content" class="block max-w-2xl mx-auto">
-                        <div class="step step-1" >
+                        <!-- solo mostrar el step 1 si no existe un data_generated o si existe y es un array y existe el step 1 -->
+                        <div class="step step-1" style="display: {{ !isset($data_generated['step']) || (isset($data_generated) && is_array($data_generated) && isset($data_generated['step']) && $data_generated['step'] == 1) ? 'block' : 'none' }};">
                             @include('herramienta1.steps.step1')
                         </div>
 
@@ -75,11 +76,56 @@
     <script>
         document.addEventListener('DOMContentLoaded', function() {
             var allFormData = {};
-            var accountID = null;
+            var id_generated = {!! isset($data_generated) && is_array($data_generated) && isset($data_generated['id_generated']) ? $data_generated['id_generated'] : 'null' !!}; // id_generated su valor puede venir desde el controlador como null o un array primero verificar si existe un data_generated y es un array
+            var accountID = {!! isset($data_generated) && is_array($data_generated) && isset($data_generated['account_id']) ? $data_generated['account_id'] : 'null' !!}; // accountID su valor puede venir desde el controlador como null o un valor
+            var step = {!! isset($data_generated) && is_array($data_generated) && isset($data_generated['step']) ? $data_generated['step'] : 'null' !!}; // step su valor puede venir desde el controlador como null o un valor
+            var metadata = {!! isset($data_generated) && is_array($data_generated) && isset($data_generated['metadata']) ? json_encode($data_generated['metadata']) : 'null' !!}; // metadata es un texto json que debemos convertir a un objeto
+
+            console.log('id_generated', id_generated);
             
             function goToStep(step) {
                 var nextStepDiv = document.querySelector('.step-' + step);
                 nextStepDiv.style.display = 'block';
+            }
+
+            if(step){
+                let goToStepFinal = false;
+                if(step >= 1){
+                    let form = document.getElementById('accountForm');
+                    let account = form.querySelector('select[name="account"]');
+                    if (account) {
+                        account.value = accountID;
+                    }
+                    goToStepFinal = true;
+                }
+                if(step >= 2){
+                    recargarInvestigation(accountID);
+                    // seleccionar el pais y el nombre de la marca
+                    let form = document.getElementById('step-2-form');
+                    let country = form.querySelector('select[name="country"]');
+                    if (country) {
+                        country.value = metadata['country'];
+                    }
+                    let name = form.querySelector('input[name="name"]');
+                    if (name) {
+                        name.value = metadata['name'];
+                    }
+                    let slogan = form.querySelector('input[name="slogan"]');
+                    if (slogan) {
+                        slogan.value = metadata['slogan'];
+                    }
+
+                    let btnregresar = form.querySelector('.step-button');
+                    if (btnregresar) {
+                        btnregresar.style.display = 'none';
+                    }
+                    
+                    goToStepFinal = true;
+                }
+                if(step >= 9){
+                    quill_briefAIField.clipboard.dangerouslyPasteHTML(marked.parse(metadata['brief']));
+                }
+                goToStep(step)
             }
 
             // Selecciona todos los contenedores de pasos
@@ -166,6 +212,10 @@
                             if (form.id !== 'accountForm') {
                                 if (accountID !== null && !isNaN(accountID)) {
                                     formData.append('account', accountID);
+                                    if(id_generated !== null && !isNaN(id_generated)){
+                                        formData.append('id_generated', id_generated);
+                                    }
+
                                     fetch(form.action, {
                                         method: 'POST',
                                         body: formData,
@@ -179,6 +229,10 @@
                                         }
                                         console.log(data);
                                         if(!data.error){
+                                            if(data.id_generated){
+                                                console.log('ID generado:', data.id_generated);
+                                                id_generated = data.id_generated;
+                                            }
                                             if(data.function) {
                                                 switch (data.function) {
                                                     case 'extraccionIA':
@@ -218,6 +272,8 @@
                                 }
                             }else{
                                 accountID = formData.get('account');
+                                console.log('accountID', accountID);
+                                recargarInvestigation(accountID);
                                 const step = this.getAttribute('data-step');
                                 goToStep(step);
                                 if (!isStep10) {
@@ -294,6 +350,32 @@
             theme: 'snow'
         });
         
+        function recargarInvestigation(accountID){
+            let url = "{{ route('getGeneratedInvestigation') }}";
+            let formData = new FormData();
+            formData.append('accountID', accountID);
+            fetch(url, {
+                method: 'POST',
+                body: formData,
+                headers: {
+                    'X-CSRF-TOKEN': "{{ csrf_token() }}",
+                    'Accept': 'application/json'
+                }
+            }).then(response => response.json())
+            .then(data => {
+                let selectElement = document.querySelector('select[name="investigation[]"]');
+                selectElement.innerHTML = '';
+                data.forEach(item => {
+                    let option = document.createElement('option');
+                    option.value = item.id;
+                    option.textContent = `${item.name}`;
+                    selectElement.appendChild(option);
+                });
+                console.log('Options updated successfully!');
+            }).catch(error => {
+                console.error('Error:', error);
+            });
+        }
 
         function extraccionIA(data){
             quill.clipboard.dangerouslyPasteHTML(marked.parse(data));

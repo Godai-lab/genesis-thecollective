@@ -6,6 +6,7 @@ use App\Models\Account;
 use App\Models\Field;
 use App\Models\Generated;
 use App\Services\OpenAiService;
+use App\Supports\ContentCategory;
 use Barryvdh\DomPDF\Facade\Pdf;
 use Carbon\Carbon;
 use Exception;
@@ -20,10 +21,126 @@ class AsistenteSocialMediaController extends Controller
         Gate::authorize('haveaccess','asistentesocialmedia.index');
         $accounts = Account::fullaccess()->get();
 
-        return view('asistenteSocialMedia.index', compact('accounts'));
+        // Categorías con sus vector stores
+        $categories = ContentCategory::all();
+       
+
+        return view('asistenteSocialMedia.index', compact('accounts', 'categories'));
     }
 
-    public function generarPrompt(Request $request){
+    public function generarPrompt(Request $request)
+{
+    try {
+        $validator = Validator::make($request->all(), [
+            '_token' => 'required',
+            'account' => 'required|integer',
+            'brief' => 'nullable|required_without:genesis|integer',
+            'genesis' => 'nullable|required_without:brief|integer',
+            'asistenteSocialMediaPrompt' => 'required|string',
+            'categories' => 'nullable|array',
+        ]);
+
+        if ($validator->fails()) {
+            return response()->json(['error' => $validator->errors()]);
+        }
+
+        ini_set('max_execution_time', 300);
+
+        $accountId = $request->input('account');
+        $briefID = $request->input('brief');
+        $genesisID = $request->input('genesis');
+
+        if ($briefID && $genesisID) {
+            return response()->json([
+                'error' => 'Solo puedes seleccionar un brief o un genesis, no ambos'
+            ]);
+        }
+
+        $fileGenerated = "";
+        if ($briefID) {
+            $fileGenerated = Generated::where('id', $briefID)->first()->value;
+        }
+        if ($genesisID) {
+            $fileGenerated = Generated::where('id', $genesisID)->first()->value;
+        }
+
+        $asistenteSocialMediaPrompt = $request->input('asistenteSocialMediaPrompt');
+
+        // Mapeo de categorías con sus vector stores
+        $categoryVectorStores = ContentCategory::vectorMap();
+       
+        
+        // Procesar categorías seleccionadas
+        $selectedCategories = $request->input('categories', []);
+        $vectorIds = [];
+        
+        if (!empty($selectedCategories)) {
+            foreach ($selectedCategories as $category) {
+                if (isset($categoryVectorStores[$category])) {
+                    $vectorIds[] = $categoryVectorStores[$category];
+                }
+            }
+        } else {
+            // Si no hay categorías seleccionadas, usar el vector store por defecto
+            $vectorIds[] = 'vs_WIikAxBR2wfrELhu6On7ALVt';
+        }
+
+        // Configuración del chat-prompt
+        $options = [
+            'model' => 'gpt-5',
+            'prompt' => [
+                'id' => 'pmpt_68dc24dc86e881948f48e2696b51af2c03832040671c2ddf',
+                'variables' => [
+                    'asistentesocialmediaprompt' => $asistenteSocialMediaPrompt,
+                    'filegenerated' => $fileGenerated
+                ]
+            ],
+            'tools' => [
+                [
+                    'type' => 'file_search',
+                    'vector_store_ids' => $vectorIds
+                ]
+            ],
+            'background' => false,
+        ];
+
+        $response = OpenAiService::createModelResponse($options);
+
+        if (isset($response['error'])) {
+            throw new \Exception($response['error']);
+        }
+
+        // Extraer respuesta final
+        $textoFinal = '';
+        if (isset($response['data']['output']) && is_array($response['data']['output'])) {
+            foreach ($response['data']['output'] as $block) {
+                if (
+                    ($block['type'] === 'message' || $block['type'] === 'assistant') &&
+                    isset($block['content'][0]['text'])
+                ) {
+                    $textoFinal = $block['content'][0]['text'];
+                    break;
+                }
+            }
+        }
+
+        return response()->json([
+            'success' => 'Datos procesados correctamente.',
+            'details' => [
+                    'data' => $textoFinal
+                ],
+            'goto' => 3,
+            'function' => 'asistenteSocialMediaGenerate'
+        ]);
+
+    } catch (\Exception $e) {
+        return response()->json([
+            'error' => $e->getMessage()
+        ]);
+    }
+}
+
+    public function generarPromptold(Request $request){
         try {
 
             $validator = Validator::make($request->all(), [

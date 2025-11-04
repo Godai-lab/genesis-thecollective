@@ -10,7 +10,12 @@ class Generated extends Model
     use HasFactory;
 
     // Permitir asignación masiva
-    protected $fillable = ['key', 'value', 'account_id', 'name', 'rating'];
+    protected $fillable = ['key', 'value', 'account_id', 'name', 'rating', 'status', 'metadata'];
+
+    // Cast para el campo metadata
+    protected $casts = [
+        'metadata' => 'array'
+    ];
 
     // Definir la relación con el modelo Account
     public function account()

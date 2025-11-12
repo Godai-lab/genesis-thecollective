@@ -163,7 +163,7 @@ class FluxService
     $additional_images = [] // Nuevo parámetro para múltiples imágenes
 ) {
     try {
-        $url = "https://api.us1.bfl.ai/v1/{$modelo}";
+        $url = "https://api.bfl.ai/v1/{$modelo}";
 
         $data = [
             "prompt" => $prompt,
@@ -251,7 +251,7 @@ class FluxService
     $webhook_secret = null
 ) {
     try {
-        $url = "https://api.us1.bfl.ai/v1/flux-pro-1.1-ultra";
+        $url = "https://api.bfl.ai/v1/flux-pro-1.1-ultra";
 
         $data = [
             "prompt" => $prompt,
@@ -313,7 +313,7 @@ class FluxService
     public static function GenerateImageFlux($prompt, $width=1024, $height=768, $prompt_upsampling=false, $seed=null, $safety_tolerance=2)
     {
         try {
-            $url = "https://api.bfl.ml/v1/flux-pro-1.1";
+            $url = "https://api.bfl.ai/v1/flux-pro-1.1";
 
             $data = [
                 "prompt" => $prompt,
@@ -364,7 +364,7 @@ class FluxService
  public static function GetResultUltra($generationId)
     {
         try {
-            $url = "https://api.us1.bfl.ai/v1/get_result?id=$generationId";
+            $url = "https://api.bfl.ai/v1/get_result?id=$generationId";
 
             $ch = curl_init();
             curl_setopt($ch, CURLOPT_URL, $url);
@@ -429,7 +429,7 @@ class FluxService
     public static function GetResult($generationId)
     {
         try {
-            $url = "https://api.bfl.ml/v1/get_result?id=$generationId";
+            $url = "https://api.bfl.ai/v1/get_result?id=$generationId";
 
             $ch = curl_init();
             curl_setopt($ch, CURLOPT_URL, $url);

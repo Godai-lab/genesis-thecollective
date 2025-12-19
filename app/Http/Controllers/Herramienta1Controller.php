@@ -918,7 +918,7 @@ Actúas como un buscador de información de alto valor especializado en analizar
 EOT;
 
 try {
-    $model = "sonar-reasoning";
+    $model = "sonar-reasoning-pro";
     $temperature = 0.7;
     $response = PerplexityService::ChatCompletions($prompt, $model, $temperature, $system_prompt);
 

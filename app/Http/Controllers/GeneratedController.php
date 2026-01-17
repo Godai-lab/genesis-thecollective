@@ -22,7 +22,10 @@ class GeneratedController extends Controller
         }
         $accountId = $request->input('accountID');
 
-        $Briefs = Generated::where('account_id',$accountId)->where('key','Brief')->get();
+        $Briefs = Generated::where('account_id',$accountId)->where('key','Brief')
+        ->where('status','completed')
+        ->where('metadata','!=',null)
+        ->get();
 
         $Briefs = collect([
             (object) [
@@ -81,7 +84,10 @@ class GeneratedController extends Controller
             return response()->json(['error' => $validator->errors()]);
         }
         $accountId = $request->input('accountID');  
-        $Genesis = Generated::where('account_id',$accountId)->where('key','Genesis')->get();
+        $Genesis = Generated::where('account_id',$accountId)->where('key','Genesis')
+        ->where('status','completed')
+        ->where('metadata','!=',null)
+        ->get();
 
         $Genesis = collect([
             (object) [

@@ -10,7 +10,7 @@
             <div class="bg-white dark:bg-gray-800 overflow-hidden sm:rounded-lg flex flex-col gap-20">
                 <h1 class="sm:text-5xl text-2xl mt-20 px-16">Resuelve una campaña 360 <br>en minutos con Génesis.</h1>
                 <div class="p-6 text-black dark:text-gray-100 grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 space-x-4 gap-32 justify-stretch items-stretch">
-                    @can('haveaccess','herramienta2.index')
+                    @can('haveaccess','genesis.index')
                     <div class="basis-1/3 flex flex-row gap-6">
                         <div class="text-base mt-1.5">
                             1.0
@@ -22,7 +22,7 @@
                         </div>
                     </div>
                     @endcan
-                    @can('haveaccess','herramienta2.index')
+                    @can('haveaccess','genesis.index')
                     <div class="basis-1/3 flex flex-row gap-6">
                         <div class="text-base mt-1.5">
                             2.0

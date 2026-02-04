@@ -275,7 +275,7 @@ Limpiar incluso lo que no se ve.
 EOT;
 
             // $model = "claude-3-7-sonnet-20250219";
-            $model = "claude-sonnet-4-20250514";
+            $model = "claude-sonnet-4-5-20250929";
             
             $temperature = 0.8;
             
@@ -469,7 +469,7 @@ Limpiar incluso lo que no se ve.
 EOT;
 
         try {
-            $model = "claude-sonnet-4-20250514";
+            $model = "claude-sonnet-4-5-20250929";
             $temperature = 0.8;
             $response = AnthropicService::TextGeneration($prompt, $model, $temperature, $system_prompt);
 
@@ -631,7 +631,7 @@ public function construccionescenario(Request $request){
 
             EOT;
 
-            $model = "claude-sonnet-4-20250514";
+            $model = "claude-sonnet-4-5-20250929";
             $temperature = 0.8;
             $response = AnthropicService::TextGeneration($prompt, $model, $temperature, $system_prompt);
 
@@ -757,7 +757,7 @@ public function regenerarConstruccionEscenario(Request $request){
 
             EOT;
 
-            $model = "claude-sonnet-4-20250514";
+            $model = "claude-sonnet-4-5-20250929";
             $temperature = 0.8;
             $response = AnthropicService::TextGeneration($prompt, $model, $temperature, $system_prompt);
 

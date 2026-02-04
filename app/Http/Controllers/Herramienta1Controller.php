@@ -194,7 +194,7 @@ public function datosextras(Request $request){
             $prompt .= "Usando este esquema JSON:\n";
             $prompt .= 'Respuesta={"extraMarca": str, "extraProductos": str, "extraCompetencia": str, "extraEstudiosMercado": str, "extraCiudadPaisEconomia": str, "extraNecesidades": str}';
 
-            $model = "gemini-2.0-flash-exp";
+            $model = "gemini-2.5-flash";
             $temperature = 0.25;
             $response_mime_type = "application/json";
 
@@ -455,7 +455,7 @@ extrae lo más importante y necesario para mejorar el brief y añadelo en el ITE
 Presenta el brief final en un formato claro y fácil de leer, utilizando viñetas y numeración donde sea apropiado. NO añadas ninguna nota adicional al inicio o final. Responde siempre en español.
 EOT;
 
-        $model = "gemini-2.0-flash-exp";
+        $model = "gemini-2.5-flash";
         $temperature = 0.25;
         $response_mime_type = "text/plain";
         $response = GeminiService::TextOnlyEntry($prompt,$model,$temperature, $response_mime_type);
@@ -717,7 +717,7 @@ EOT;
 
 
     try {
-        $model = "gemini-2.0-flash-exp";
+        $model = "gemini-2.5-flash";
         $temperature = 0.7;
         $response = GeminiService::TextOnlyEntry($prompt, $model, $temperature);
 

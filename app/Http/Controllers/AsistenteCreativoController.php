@@ -111,7 +111,6 @@ class AsistenteCreativoController extends Controller
             ]);
     
             $options = [
-                'model' => 'gpt-5',
                 'prompt' => [
                     'id' => 'pmpt_68dafbf1014c8195a6f3afca452f954103267248dc0692ae',
                     'variables' => [

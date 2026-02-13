@@ -87,7 +87,6 @@ class AsistenteSocialMediaController extends Controller
 
         // Configuración del chat-prompt
         $options = [
-            'model' => 'gpt-5',
             'prompt' => [
                 'id' => 'pmpt_68dc24dc86e881948f48e2696b51af2c03832040671c2ddf',
                 'variables' => [

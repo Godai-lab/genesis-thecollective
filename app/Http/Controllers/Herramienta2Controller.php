@@ -2083,7 +2083,6 @@ public function generarCreatividad($Tipodecampaña, $objective, $genesiscompleto
 
         // Opciones para el chat-prompt
         $options = [
-            'model' => $modelo,
             'prompt' => [
                 'id' => 'pmpt_68c9cde4f2ac8196b3a33b12c74e47790435d1a45d459271',
                 
@@ -2240,7 +2239,6 @@ public function generarEstrategia($Tipodecampaña, $objective, $genesiscompleto,
 
         // Opciones para la API
         $options = [
-            'model' => $modelo,
             'prompt' => [
                 'id' => 'pmpt_68c3468147e48193ab09564bc856756905b09529b9ba957c',
                 'variables' => [
@@ -2404,7 +2402,6 @@ public function generarIdeasContenido($Tipodecampaña, $objective, $genesiscompl
         ini_set('max_execution_time', 600);
         Log::info('Iniciando contenido ideas con');
         $options = [
-            'model' => $modelo,
             'prompt' => [
                 'id' => 'pmpt_68cad29e51848196846bfe853574f0590b7a0c62264f6ee6',
                
